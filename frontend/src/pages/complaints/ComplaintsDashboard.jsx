@@ -217,7 +217,10 @@ export default function ComplaintsDashboard() {
   };
 
   return (
-    <div className="container-fluid mt-4 mb-5 complaints-workspace complaints-dashboard">
+    <div
+      className="container-fluid mt-4 mb-5 complaints-workspace complaints-dashboard"
+      data-testid="complaint-page"
+    >
       <div className="page-intro-card complaint-hero-card mb-4">
         <div className="list-toolbar align-items-start">
           <div>

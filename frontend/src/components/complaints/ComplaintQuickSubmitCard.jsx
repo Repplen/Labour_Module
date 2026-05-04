@@ -32,7 +32,7 @@ export default function ComplaintQuickSubmitCard({
   };
 
   return (
-    <div className="soft-card complaint-submit-card">
+    <div className="soft-card complaint-submit-card" data-testid="complaint-form">
       <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
         <div>
           <div className="page-kicker">Quick Raise</div>
@@ -102,7 +102,13 @@ export default function ComplaintQuickSubmitCard({
       </div>
 
       <div className="mt-3">
-        <button type="button" className="btn btn-primary" onClick={onSubmit} disabled={saving}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onSubmit}
+          disabled={saving}
+          data-testid="complaint-submit"
+        >
           {saving ? "Submitting..." : "Submit Complaint"}
         </button>
       </div>

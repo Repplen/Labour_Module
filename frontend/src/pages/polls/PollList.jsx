@@ -96,7 +96,7 @@ export default function PollList() {
   }
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="poll-master-page">
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -116,7 +116,7 @@ export default function PollList() {
               </Link>
             ) : null}
             {canCreatePolls ? (
-              <Link className="btn btn-success" to="/polls/create">
+              <Link className="btn btn-success" to="/polls/create" data-testid="add-poll-button">
                 Create Poll
               </Link>
             ) : null}
@@ -182,7 +182,7 @@ export default function PollList() {
 
       <div className="table-shell">
         <div className="table-responsive">
-          <table className="table table-bordered align-middle">
+          <table className="table table-bordered align-middle" data-testid="poll-table">
             <thead className="table-light">
               <tr>
                 <th>#</th>

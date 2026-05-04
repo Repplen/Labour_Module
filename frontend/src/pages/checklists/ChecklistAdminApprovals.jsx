@@ -77,9 +77,12 @@ function SnapshotSection({ title, fields, changedFieldKeys }) {
 }
 
 export default function ChecklistAdminApprovals() {
-  const { can } = usePermissions();
-  const canApproveRequests = can("checklist_master", "approve");
-  const canRejectRequests = can("checklist_master", "reject");
+  const { can, user } = usePermissions();
+  const isMainAdminReviewer =
+    Boolean(user?.isDefaultAdmin) ||
+    String(user?.roleKey || "").toLowerCase() === "main_admin";
+  const canApproveRequests = isMainAdminReviewer && can("checklist_master", "approve");
+  const canRejectRequests = isMainAdminReviewer && can("checklist_master", "reject");
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("pending_admin_approval");
@@ -199,7 +202,7 @@ export default function ChecklistAdminApprovals() {
   );
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="checklist-approval-page">
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -287,7 +290,10 @@ export default function ChecklistAdminApprovals() {
 
       <div className="table-shell">
         <div className="table-responsive">
-          <table className="table table-bordered table-striped align-middle">
+          <table
+            className="table table-bordered table-striped align-middle"
+            data-testid="approval-table"
+          >
             <thead className="table-dark">
               <tr>
                 <th>#</th>
@@ -522,6 +528,7 @@ export default function ChecklistAdminApprovals() {
                       <button
                         type="button"
                         className="btn btn-outline-danger"
+                        data-testid="reject-button"
                         onClick={() => void handleDecision("reject")}
                         disabled={actionLoading}
                       >
@@ -532,6 +539,7 @@ export default function ChecklistAdminApprovals() {
                       <button
                         type="button"
                         className="btn btn-success"
+                        data-testid="approve-button"
                         onClick={() => void handleDecision("approve")}
                         disabled={actionLoading}
                       >

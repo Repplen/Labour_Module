@@ -368,8 +368,11 @@ export default function ChecklistCreate({ mode = "create" }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = mode === "edit" && Boolean(id);
-  const { can, scope } = usePermissions();
-  const canApplyChecklistChangesDirectly = can("checklist_master", "approve");
+  const { scope, user } = usePermissions();
+  const canApplyChecklistChangesDirectly =
+    String(user?.role || "").toLowerCase() === "admin" &&
+    (Boolean(user?.isDefaultAdmin) ||
+      String(user?.roleKey || "").toLowerCase() === "main_admin");
   const usesApprovalRequestFlow = !canApplyChecklistChangesDirectly;
   const restrictedChecklistSiteId =
     Array.isArray(scope?.siteIds) && scope.siteIds.length === 1
@@ -545,24 +548,19 @@ export default function ChecklistCreate({ mode = "create" }) {
       setPageLoading(true);
 
       try {
-        const requests = [
-          api.get("/employees", { params: { status: "active" } }),
-          api.get("/departments"),
-          api.get("/sites"),
-          api.get("/checklists"),
-        ];
+        const requests = [api.get("/checklists/setup-data")];
 
         if (isEditMode) {
           requests.push(api.get(`/checklists/${id}`));
         }
 
-        const [employeeRes, departmentRes, siteRes, checklistOptionsRes, checklistRes] =
-          await Promise.all(requests);
-        const employeeRows = Array.isArray(employeeRes.data) ? employeeRes.data : [];
-        const departmentRows = Array.isArray(departmentRes.data) ? departmentRes.data : [];
-        const siteRows = Array.isArray(siteRes.data) ? siteRes.data : [];
-        const dependencyChecklistRows = Array.isArray(checklistOptionsRes.data)
-          ? checklistOptionsRes.data
+        const [setupRes, checklistRes] = await Promise.all(requests);
+        const setupData = setupRes.data || {};
+        const employeeRows = Array.isArray(setupData.employees) ? setupData.employees : [];
+        const departmentRows = Array.isArray(setupData.departments) ? setupData.departments : [];
+        const siteRows = Array.isArray(setupData.sites) ? setupData.sites : [];
+        const dependencyChecklistRows = Array.isArray(setupData.checklists)
+          ? setupData.checklists
           : [];
 
         setEmployees(employeeRows);
@@ -924,7 +922,7 @@ export default function ChecklistCreate({ mode = "create" }) {
   }
 
   return (
-    <div className="container mt-4 mb-5">
+    <div className="container mt-4 mb-5" data-testid="checklist-create-page">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <h3 className="mb-1">
@@ -952,7 +950,10 @@ export default function ChecklistCreate({ mode = "create" }) {
 
           <div className="row g-4">
             <div className="col-12 col-xl-6">
-              <div className="border rounded-4 p-4 bg-light h-100">
+              <div
+                className="border rounded-4 p-4 bg-light h-100"
+                data-testid="employee-assignment-section"
+              >
                 <div className="mb-3">
                   <h5 className="mb-1">Master Setup</h5>
                   <div className="text-muted small">
@@ -1242,6 +1243,7 @@ export default function ChecklistCreate({ mode = "create" }) {
                 name="scheduleType"
                 value={form.scheduleType}
                 onChange={handleFormChange}
+                data-testid="schedule-type-select"
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -1373,6 +1375,7 @@ export default function ChecklistCreate({ mode = "create" }) {
                       name="repeatDayOfWeek"
                       value={form.repeatDayOfWeek}
                       onChange={handleFormChange}
+                      data-testid="day-of-week-select"
                     >
                       <option value="">Select Day</option>
                       {weekDays.map((day) => (
@@ -1747,7 +1750,12 @@ export default function ChecklistCreate({ mode = "create" }) {
           >
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading}
+            data-testid="save-checklist-button"
+          >
             {loading
               ? isEditMode
                 ? usesApprovalRequestFlow

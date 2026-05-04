@@ -352,7 +352,7 @@ export default function EmployeeList() {
   }
 
   return (
-    <div className="container-fluid mt-4 mb-5 px-4">
+    <div className="container-fluid mt-4 mb-5 px-4" data-testid="employee-master-page">
       <div className="page-intro-card employee-directory-hero mb-4">
         <div className="list-toolbar align-items-start">
           <div>
@@ -395,7 +395,7 @@ export default function EmployeeList() {
                 </button>
               ) : null}
               {canAddEmployee ? (
-                <Link to="/add" className="btn btn-primary">
+                <Link to="/add" className="btn btn-primary" data-testid="add-employee-button">
                   Add Employee
                 </Link>
               ) : null}
@@ -489,7 +489,10 @@ export default function EmployeeList() {
 
       <div className="table-shell employee-directory-table-shell">
         <div className="table-responsive">
-          <table className="table table-bordered table-striped align-middle employee-directory-table">
+          <table
+            className="table table-bordered table-striped align-middle employee-directory-table"
+            data-testid="employee-table"
+          >
             <thead className="table-dark">
               <tr>
                 {canDeleteEmployee ? (
@@ -696,6 +699,7 @@ export default function EmployeeList() {
                             {canToggleEmployeeStatus ? (
                               <button
                                 type="button"
+                                data-testid="employee-status-toggle"
                                 className={`btn btn-sm app-icon-action-btn ${
                                   employee.isActive ? "btn-secondary" : "btn-success"
                                 }`}
@@ -753,6 +757,7 @@ function EmployeeStatusConfirmationModal({ employee, saving, error, onCancel, on
   return (
     <div
       className="modal fade show d-block app-modal-overlay"
+      data-testid="confirm-status-modal"
       tabIndex="-1"
       role="dialog"
       aria-modal="true"
@@ -804,6 +809,7 @@ function EmployeeStatusConfirmationModal({ employee, saving, error, onCancel, on
             <button
               type="button"
               className="btn btn-outline-secondary"
+              data-testid="confirm-cancel-button"
               onClick={onCancel}
               disabled={saving}
             >
@@ -812,6 +818,7 @@ function EmployeeStatusConfirmationModal({ employee, saving, error, onCancel, on
             <button
               type="button"
               className={`btn ${isDeactivation ? "btn-danger" : "btn-success"}`}
+              data-testid="confirm-ok-button"
               onClick={onConfirm}
               disabled={saving}
             >

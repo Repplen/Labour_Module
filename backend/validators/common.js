@@ -27,6 +27,15 @@ const objectIdField = (label) =>
     z.string().regex(objectIdPattern, `${label} must be a valid id`)
   );
 
+const optionalObjectIdField = (label) =>
+  z.preprocess(
+    (value) => {
+      const trimmed = trimValue(value);
+      return trimmed === "" || trimmed === null ? undefined : trimmed;
+    },
+    z.string().regex(objectIdPattern, `${label} must be a valid id`).optional()
+  );
+
 const idParamSchema = z.object({
   id: objectIdField("Id"),
 });
@@ -106,6 +115,7 @@ module.exports = {
   optionalBooleanLike,
   optionalDateStringField,
   optionalNumberLike,
+  optionalObjectIdField,
   optionalTrimmedString,
   requiredTrimmedString,
   timeStringField,

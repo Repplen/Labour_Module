@@ -2,6 +2,7 @@ const {
   idParamSchema,
   objectIdField,
   optionalBooleanLike,
+  optionalObjectIdField,
   optionalTrimmedString,
   requiredTrimmedString,
   z,
@@ -49,9 +50,9 @@ const updateUserSchema = z
       "Password must be at least 6 characters"
     ),
     role: optionalTrimmedString,
-    siteId: objectIdField("Site id").optional(),
-    site: objectIdField("Site").optional(),
-    roleId: objectIdField("Role id").optional(),
+    siteId: optionalObjectIdField("Site id"),
+    site: optionalObjectIdField("Site"),
+    roleId: optionalObjectIdField("Role id"),
     checklistMasterAccess: optionalBooleanLike,
   })
   .passthrough();

@@ -137,7 +137,7 @@ export default function Login() {
                 ) : null}
 
                 {error ? (
-                  <div className="alert alert-danger" role="alert">
+                  <div className="alert alert-danger" role="alert" data-testid="login-error">
                     {error}
                   </div>
                 ) : null}
@@ -146,6 +146,7 @@ export default function Login() {
                   <div className="login-field mb-3">
                     <label className="form-label">Login ID</label>
                     <input
+                      data-testid="login-email"
                       type="text"
                       className="form-control login-input"
                       placeholder="Employee code, employee name, or email"
@@ -159,6 +160,7 @@ export default function Login() {
                     <label className="form-label">Password</label>
                     <div className="login-password-control">
                       <input
+                        data-testid="login-password"
                         type={showPassword ? "text" : "password"}
                         className="form-control login-input login-password-input"
                         placeholder="Password"
@@ -179,7 +181,11 @@ export default function Login() {
                     </div>
                   </div>
 
-                  <button className="btn btn-primary w-100 login-submit" disabled={loading}>
+                  <button
+                    className="btn btn-primary w-100 login-submit"
+                    disabled={loading}
+                    data-testid="login-submit"
+                  >
                     {loading ? (
                       <>
                         <span className="login-spinner" aria-hidden="true" />

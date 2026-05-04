@@ -28,6 +28,7 @@ const {
   getApprovalTasks,
   getChecklistById,
   getChecklistRequestNotifications,
+  getChecklistSetupData,
   getChecklistTransferChecklists,
   getChecklistTransferHistory,
   getChecklistTaskById,
@@ -47,6 +48,12 @@ const {
 } = require("../controllers/checklist.controller");
 
 router.get("/", auth, requirePermission("checklist_master", "view"), getChecklists);
+router.get(
+  "/setup-data",
+  auth,
+  requirePermission("checklist_master", "view"),
+  getChecklistSetupData
+);
 router.get(
   "/next-number",
   auth,

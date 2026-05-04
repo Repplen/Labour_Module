@@ -325,7 +325,7 @@ export default function PollCreate() {
   }
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="poll-create-page">
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -340,7 +340,13 @@ export default function PollCreate() {
             <button type="button" className="btn btn-outline-secondary" onClick={() => navigate("/polls")}>
               Back
             </button>
-            <button type="button" className="btn btn-success" onClick={savePoll} disabled={saving}>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={savePoll}
+              disabled={saving}
+              data-testid="save-poll-button"
+            >
               {saving ? "Saving..." : isEditMode ? "Update Poll" : "Create Poll"}
             </button>
           </div>
@@ -373,6 +379,7 @@ export default function PollCreate() {
               type="date"
               className="form-control"
               value={form.startDate}
+              data-testid="poll-start-date"
               onChange={(event) =>
                 setForm((currentForm) => ({ ...currentForm, startDate: event.target.value }))
               }
@@ -385,6 +392,7 @@ export default function PollCreate() {
               type="time"
               className="form-control"
               value={form.startTime}
+              data-testid="poll-start-time"
               onChange={(event) =>
                 setForm((currentForm) => ({ ...currentForm, startTime: event.target.value }))
               }
@@ -397,6 +405,7 @@ export default function PollCreate() {
               type="date"
               className="form-control"
               value={form.endDate}
+              data-testid="poll-end-date"
               onChange={(event) =>
                 setForm((currentForm) => ({ ...currentForm, endDate: event.target.value }))
               }
@@ -409,6 +418,7 @@ export default function PollCreate() {
               type="time"
               className="form-control"
               value={form.endTime}
+              data-testid="poll-end-time"
               onChange={(event) =>
                 setForm((currentForm) => ({ ...currentForm, endTime: event.target.value }))
               }

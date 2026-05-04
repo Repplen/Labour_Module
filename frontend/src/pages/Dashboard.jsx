@@ -1187,6 +1187,7 @@ export default function Dashboard({
   return (
     <div
       className={`dashboard-shell ${fullWidth ? "container-fluid px-4" : "container"} mt-4 mb-5`}
+      data-testid="dashboard-page"
     >
       <div className="page-intro-card mb-4">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-3">
@@ -2479,7 +2480,10 @@ function StatCard({ title, value, color }) {
 
   return (
     <div className="col-12 col-md-6 col-xl-3">
-      <div className={`card h-100 dashboard-stat-card dashboard-stat-card--${cardClassName}`}>
+      <div
+        className={`card h-100 dashboard-stat-card dashboard-stat-card--${cardClassName}`}
+        data-testid="dashboard-card"
+      >
         <div className="card-body dashboard-stat-card__body">
           <div className="dashboard-stat-card__icon-ring">
             <DashboardGlyph

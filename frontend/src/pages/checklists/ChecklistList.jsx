@@ -550,7 +550,7 @@ function AdminChecklistMasterList({
   const hasFilters = Boolean(search.trim() || status || scheduleType);
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="checklist-master-page">
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -608,7 +608,11 @@ function AdminChecklistMasterList({
               </button>
             ) : null}
             {canCreate ? (
-              <Link to="/checklists/create" className="btn btn-success">
+              <Link
+                to="/checklists/create"
+                className="btn btn-success"
+                data-testid="add-checklist-button"
+              >
                 Create Master
               </Link>
             ) : null}
@@ -689,7 +693,10 @@ function AdminChecklistMasterList({
 
       <div className="table-shell">
       <div className="table-responsive">
-        <table className="table table-bordered table-striped align-middle">
+        <table
+          className="table table-bordered table-striped align-middle"
+          data-testid="checklist-table"
+        >
           <thead className="table-dark">
             <tr>
               {canDelete ? (
@@ -821,6 +828,7 @@ function AdminChecklistMasterList({
                       {canToggle ? (
                         <button
                           type="button"
+                          data-testid="checklist-status-toggle"
                           className={`btn btn-sm app-icon-action-btn ${
                             row.status ? "btn-outline-secondary" : "btn-outline-success"
                           }`}
@@ -865,6 +873,7 @@ function ChecklistStatusConfirmationModal({ checklist, saving, error, onCancel, 
   return (
     <div
       className="modal fade show d-block app-modal-overlay"
+      data-testid="confirm-status-modal"
       tabIndex="-1"
       role="dialog"
       aria-modal="true"
@@ -916,6 +925,7 @@ function ChecklistStatusConfirmationModal({ checklist, saving, error, onCancel, 
             <button
               type="button"
               className="btn btn-outline-secondary"
+              data-testid="confirm-cancel-button"
               onClick={onCancel}
               disabled={saving}
             >
@@ -924,6 +934,7 @@ function ChecklistStatusConfirmationModal({ checklist, saving, error, onCancel, 
             <button
               type="button"
               className={`btn ${isDeactivation ? "btn-danger" : "btn-success"}`}
+              data-testid="confirm-ok-button"
               onClick={onConfirm}
               disabled={saving}
             >

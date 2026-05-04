@@ -183,7 +183,7 @@ exports.login = async (req, res) => {
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find(
-      {},
+      { isActive: { $ne: false } },
       "name email role roleId checklistMasterAccess site createdAt updatedAt isDefaultAdmin accessScopeStrategy accessCompanyIds accessSiteIds accessDepartmentIds accessSubDepartmentIds accessEmployeeIds isActive"
     )
       .populate("site", "name companyName")

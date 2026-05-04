@@ -249,14 +249,23 @@ export default function UsersAdmin() {
         throw new Error("Site is required for Checklist Master users");
       }
 
-      const response = await api.put(`/auth/users/${editForm.id}`, {
+      const payload = {
         name: editForm.name.trim(),
         email: editForm.email.trim().toLowerCase(),
-        password: editForm.password,
         role: editForm.role,
-        siteId: editForm.role === "admin" ? "" : editForm.siteId,
         checklistMasterAccess: editForm.role === "admin" ? false : true,
-      });
+      };
+
+      const nextPassword = editForm.password.trim();
+      if (nextPassword) {
+        payload.password = nextPassword;
+      }
+
+      if (editForm.role !== "admin") {
+        payload.siteId = editForm.siteId;
+      }
+
+      const response = await api.put(`/auth/users/${editForm.id}`, payload);
 
       if (String(currentUser.id || "") === String(editForm.id) && response.data?.user) {
         localStorage.setItem("user", JSON.stringify(response.data.user));
@@ -273,7 +282,7 @@ export default function UsersAdmin() {
   };
 
   return (
-    <div className="container mt-4">
+    <div className="container mt-4" data-testid="user-admin-page">
       <h4 className="mb-3">Admin User Panel</h4>
 
       {error ? <div className="alert alert-danger py-2">{error}</div> : null}
@@ -350,7 +359,11 @@ export default function UsersAdmin() {
             </div>
 
             <div className="col-12 d-flex justify-content-end">
-              <button className="btn btn-primary px-4" disabled={saving || !siteOptions.length}>
+              <button
+                className="btn btn-primary px-4"
+                disabled={saving || !siteOptions.length}
+                data-testid="add-user-button"
+              >
                 {saving ? "Saving..." : "Create User"}
               </button>
             </div>
@@ -375,7 +388,10 @@ export default function UsersAdmin() {
           <h6 className="card-title">Multiple Users View</h6>
 
           <div className="table-responsive">
-            <table className="table table-striped table-bordered align-middle">
+            <table
+              className="table table-striped table-bordered align-middle"
+              data-testid="user-table"
+            >
               <thead className="table-dark">
                 <tr>
                   <th>Name</th>

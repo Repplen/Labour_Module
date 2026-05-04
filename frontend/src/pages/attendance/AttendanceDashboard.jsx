@@ -157,7 +157,7 @@ export default function AttendanceDashboard() {
   );
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="attendance-page">
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body">
           <div className="text-uppercase small fw-semibold text-muted">Attendance</div>
@@ -474,7 +474,7 @@ export default function AttendanceDashboard() {
             <div className="card-body">
               <h5 className="mb-3">Employee Attendance Summary</h5>
               <div className="table-responsive">
-                <table className="table table-bordered align-middle">
+                <table className="table table-bordered align-middle" data-testid="attendance-table">
                   <thead className="table-dark">
                     <tr>
                       <th>Employee</th>

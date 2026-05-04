@@ -1171,7 +1171,10 @@ export default function Navbar() {
   );
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark px-3 px-lg-4 app-navbar">
+    <nav
+      className="navbar navbar-expand-lg navbar-dark px-3 px-lg-4 app-navbar"
+      data-testid="app-navbar"
+    >
       <div className="app-navbar__toprow">
         <NavLink className="navbar-brand fw-semibold" to={homePath}>
           Check List Workspace
@@ -1236,7 +1239,7 @@ export default function Navbar() {
             {resolvedRole?.name || (isAdmin ? "Admin" : isEmployee ? "Employee" : "User")}
           </span>
 
-          <button onClick={logout} className="btn btn-danger btn-sm">
+          <button onClick={logout} className="btn btn-danger btn-sm" data-testid="logout-button">
             Logout
           </button>
         </div>

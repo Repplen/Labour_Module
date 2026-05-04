@@ -278,7 +278,7 @@ function PermissionMatrixTable({ actions, rows, onToggle, onToggleAction, onTogg
       </div>
 
       <div className="table-responsive">
-        <table className="table table-bordered align-middle">
+        <table className="table table-bordered align-middle" data-testid="permission-table">
           <thead className="table-dark">
             <tr>
               <th style={{ width: "72px" }}>S.No</th>
@@ -641,7 +641,7 @@ export default function RolePermissionSetup() {
   }
 
   return (
-    <div className="container-fluid mt-4 mb-5">
+    <div className="container-fluid mt-4 mb-5" data-testid="role-permission-page">
       <div className="page-intro-card mb-4">
         <div className="page-kicker">Administration</div>
         <h3 className="mb-1">Role Permission Setup</h3>

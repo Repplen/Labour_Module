@@ -4,17 +4,24 @@ const ChecklistTask = require("../models/ChecklistTask");
 const ChecklistTransferHistory = require("../models/ChecklistTransferHistory");
 const ChecklistAdminRequest = require("../models/ChecklistAdminRequest");
 const ChecklistRequestNotification = require("../models/ChecklistRequestNotification");
+const Department = require("../models/Department");
 const Employee = require("../models/Employee");
 const Site = require("../models/Site");
 const User = require("../models/User");
 const {
   buildChecklistMasterScopeFilter,
+  buildDepartmentScopeFilter,
+  buildEmployeeScopeFilter,
+  buildSiteScopeFilter,
   filterRowsByAccessibleEmployees,
   isAllScope,
   resolveAccessibleEmployeeIds,
   uniqueIdList,
 } = require("../services/accessScope.service");
-const { hasModulePermission } = require("../services/permissionResolver.service");
+const {
+  hasModulePermission,
+  resolvePrincipalAccess,
+} = require("../services/permissionResolver.service");
 const {
   TASK_STATUSES,
   TASK_TIMELINESS_STATUSES,
@@ -40,14 +47,19 @@ const {
 const normalizeText = (value) => String(value || "").trim();
 const canViewChecklistTransfer = (user) =>
   hasModulePermission(user?.permissions, "checklist_transfer", "view");
+const isMainAdminReviewer = (user) =>
+  Boolean(user?.isDefaultAdmin) ||
+  normalizeText(user?.roleKey).toLowerCase() === "main_admin";
 const canApproveChecklistRequests = (user) =>
+  isMainAdminReviewer(user) &&
   hasModulePermission(user?.permissions, "checklist_master", "approve");
 const canRejectChecklistRequests = (user) =>
+  isMainAdminReviewer(user) &&
   hasModulePermission(user?.permissions, "checklist_master", "reject");
 const canReviewChecklistRequests = (user) =>
   canApproveChecklistRequests(user) || canRejectChecklistRequests(user);
 const canBypassChecklistAdminApproval = (user) =>
-  isAdminRequester(user) || canApproveChecklistRequests(user);
+  isAdminRequester(user) && isMainAdminReviewer(user);
 
 const mergeQueryFilters = (...filters) => {
   const activeFilters = filters.filter(
@@ -528,8 +540,29 @@ const checklistTransferHistoryPopulateQuery = [
   },
 ];
 
-const getChecklistAdminRecipients = async () =>
-  User.find({ role: "admin" }, "_id name email isDefaultAdmin").lean();
+const getChecklistAdminRecipients = async () => {
+  const users = await User.find(
+    { isActive: { $ne: false } },
+    "name email role roleId site isDefaultAdmin checklistMasterAccess accessScopeStrategy accessCompanyIds accessSiteIds accessDepartmentIds accessSubDepartmentIds accessEmployeeIds"
+  ).lean();
+
+  const recipientRows = await Promise.all(
+    users.map(async (user) => {
+      const access = await resolvePrincipalAccess({ principalType: "user", principal: user });
+      const isMainAdmin =
+        Boolean(user?.isDefaultAdmin) ||
+        normalizeText(access.role?.key).toLowerCase() === "main_admin";
+      const canReview =
+        isMainAdmin &&
+        (hasModulePermission(access.permissions, "checklist_master", "approve") ||
+          hasModulePermission(access.permissions, "checklist_master", "reject"));
+
+      return canReview ? user : null;
+    })
+  );
+
+  return recipientRows.filter(Boolean);
+};
 
 const createChecklistRequestNotifications = async ({
   requestId,
@@ -1054,6 +1087,51 @@ const createChecklistTransferApprovalRequest = async ({
   }
 
   return request;
+};
+
+const ensurePendingReviewNotificationsForUser = async (user = {}) => {
+  if (!canReviewChecklistRequests(user)) return;
+
+  const pendingRequests = await ChecklistAdminRequest.find(
+    { status: CHECKLIST_REQUEST_STATUS.pending },
+    "_id moduleKey actionType entryLabel requestSummary requestedByName"
+  ).lean();
+
+  if (!pendingRequests.length) return;
+
+  const requestIds = pendingRequests.map((request) => request._id);
+  const existingNotifications = await ChecklistRequestNotification.find(
+    {
+      request: { $in: requestIds },
+      recipientUser: user.id,
+      recipientScope: "admin",
+    },
+    "request"
+  ).lean();
+  const existingRequestIds = new Set(
+    existingNotifications.map((notification) => normalizeText(notification.request))
+  );
+  const missingRequests = pendingRequests.filter(
+    (request) => !existingRequestIds.has(normalizeText(request._id))
+  );
+
+  if (!missingRequests.length) return;
+
+  await Promise.all(
+    missingRequests.map((request) =>
+      createChecklistRequestNotifications({
+        requestId: request._id,
+        recipients: [{ _id: user.id }],
+        recipientScope: "admin",
+        notificationType: CHECKLIST_REQUEST_NOTIFICATION_TYPES.submitted,
+        moduleKey: request.moduleKey,
+        actionType: request.actionType,
+        title: buildAdminRequestNotificationTitle(request),
+        message: buildAdminRequestNotificationMessage(request),
+        routePath: "/checklists/admin-approvals",
+      })
+    )
+  );
 };
 
 const getPendingTransferRequestConflict = async (checklistIds = [], excludedRequestId = "") => {
@@ -2029,6 +2107,95 @@ const getChecklistFilters = (query = {}) => {
   return filter;
 };
 
+const findNestedDepartmentNode = (rows = [], nodeId, trail = []) => {
+  const targetId = normalizeText(nodeId);
+  if (!targetId) return null;
+
+  for (const row of rows || []) {
+    const nextTrail = [...trail, normalizeText(row?.name)].filter(Boolean);
+
+    if (normalizeText(row?._id) === targetId) {
+      return {
+        _id: targetId,
+        name: normalizeText(row?.name),
+        path: nextTrail.join(" > "),
+      };
+    }
+
+    const child = findNestedDepartmentNode(row?.children || [], targetId, nextTrail);
+    if (child) return child;
+  }
+
+  return null;
+};
+
+const getEmployeeDepartmentRows = (employee = {}) =>
+  (Array.isArray(employee.department) ? employee.department : employee.department ? [employee.department] : [])
+    .filter(Boolean);
+
+const getEmployeeDepartmentDetails = (employee = {}) =>
+  getEmployeeDepartmentRows(employee)
+    .map((department) => ({
+      _id: normalizeText(department?._id || department),
+      name: normalizeText(department?.name),
+      headNames: Array.isArray(department?.headNames) ? department.headNames : [],
+    }))
+    .filter((department) => department._id || department.name);
+
+const getEmployeeSubDepartmentDetails = (employee = {}) => {
+  const departmentRows = getEmployeeDepartmentRows(employee);
+
+  return normalizeIdList(employee.subDepartment)
+    .map((subDepartmentId) => {
+      for (const department of departmentRows) {
+        const match = findNestedDepartmentNode(department?.subDepartments || [], subDepartmentId);
+        if (!match) continue;
+
+        return {
+          _id: subDepartmentId,
+          departmentId: normalizeText(department?._id || department),
+          departmentName: normalizeText(department?.name),
+          name: match.name,
+          path:
+            normalizeText(department?.name) && match.path
+              ? `${normalizeText(department.name)} > ${match.path}`
+              : match.path || match.name,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+};
+
+const mapChecklistSetupEmployee = (employeeDoc) => {
+  const employee = toPlainObject(employeeDoc);
+  const departmentDetails = getEmployeeDepartmentDetails(employee);
+  const subDepartmentDetails = getEmployeeSubDepartmentDetails(employee);
+  const departmentNames = departmentDetails.map((department) => department.name).filter(Boolean);
+  const subDepartmentNames = subDepartmentDetails
+    .map((subDepartment) => subDepartment.name)
+    .filter(Boolean);
+  const subDepartmentPaths = subDepartmentDetails
+    .map((subDepartment) => subDepartment.path)
+    .filter(Boolean);
+
+  return {
+    ...employee,
+    departmentIds: departmentDetails.map((department) => department._id).filter(Boolean),
+    departmentDetails,
+    departmentName: departmentNames.join(", "),
+    departmentDisplay: departmentNames.join(", "),
+    subDepartment: normalizeIdList(employee.subDepartment),
+    subDepartmentDetails,
+    subDepartmentNames,
+    subDepartmentPaths,
+    subDepartmentName: subDepartmentNames.join(", "),
+    subDepartmentPath: subDepartmentPaths.join(", "),
+    subDepartmentDisplay: subDepartmentPaths.join(", "),
+  };
+};
+
 const getTaskFilters = (query = {}) => {
   const search = normalizeText(query.search);
   const status = normalizeText(query.status).toLowerCase();
@@ -2893,6 +3060,52 @@ exports.getChecklists = async (req, res) => {
   } catch (err) {
     console.error("GET CHECKLISTS ERROR:", err);
     return res.status(500).json({ message: "Failed to load checklist master data" });
+  }
+};
+
+exports.getChecklistSetupData = async (req, res) => {
+  try {
+    if (!hasChecklistMasterAccess(req.user)) {
+      return res.status(403).json({ message: "Checklist Master access is required" });
+    }
+
+    const restrictedSiteId = getRestrictedChecklistSiteId(req.user);
+    const [employees, departments, sites, checklists] = await Promise.all([
+      Employee.find({
+        ...(await buildEmployeeScopeFilter(req.access || {})),
+        isActive: true,
+      })
+        .populate("department", "name subDepartments headNames")
+        .populate("superiorEmployee", "employeeCode employeeName")
+        .populate("sites", "name companyName subSites")
+        .sort({ employeeCode: 1, employeeName: 1 }),
+      Department.find({
+        ...(await buildDepartmentScopeFilter(req.access || {})),
+        isActive: { $ne: false },
+      }).sort({ name: 1 }),
+      Site.find({
+        ...(await buildSiteScopeFilter(req.access || {})),
+        isActive: { $ne: false },
+      }).sort({ companyName: 1, name: 1 }),
+      Checklist.find(
+        mergeQueryFilters(
+          await buildChecklistMasterScopeFilter(req.access || {}),
+          restrictedSiteId ? { employeeAssignedSite: restrictedSiteId } : {}
+        )
+      )
+        .populate(checklistPopulateQuery)
+        .sort({ createdAt: -1 }),
+    ]);
+
+    return res.json({
+      employees: employees.map(mapChecklistSetupEmployee),
+      departments,
+      sites,
+      checklists,
+    });
+  } catch (err) {
+    console.error("GET CHECKLIST SETUP DATA ERROR:", err);
+    return res.status(500).json({ message: "Failed to load checklist setup data" });
   }
 };
 
@@ -4223,6 +4436,8 @@ exports.getChecklistRequestNotifications = async (req, res) => {
     if (!hasChecklistMasterAccess(req.user)) {
       return res.status(403).json({ message: "Checklist Master access is required" });
     }
+
+    await ensurePendingReviewNotificationsForUser(req.user);
 
     const filter = {
       recipientUser: req.user.id,

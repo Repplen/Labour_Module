@@ -6,6 +6,7 @@ jest.mock("../config/env", () => ({
 }));
 
 jest.mock("../models/User", () => ({
+  find: jest.fn(),
   findOne: jest.fn(),
   countDocuments: jest.fn(),
 }));
@@ -45,7 +46,7 @@ const {
   resolvePrincipalAccess,
 } = require("../services/permissionResolver.service");
 const { createMockResponse } = require("./helpers/http");
-const { login } = require("../controllers/auth.controller");
+const { getUsers, login } = require("../controllers/auth.controller");
 
 describe("auth.controller login", () => {
   beforeEach(() => {
@@ -140,5 +141,37 @@ describe("auth.controller login", () => {
       })
     );
     expect(User.findOne).not.toHaveBeenCalled();
+  });
+
+  test("lists only active admin panel users", async () => {
+    const rows = [
+      {
+        _id: "active-user-1",
+        name: "Active User",
+        email: "active@example.com",
+        isActive: true,
+      },
+    ];
+    const sort = jest.fn().mockResolvedValue(rows);
+    const populateRole = jest.fn().mockReturnValue({ sort });
+    const populateSite = jest.fn().mockReturnValue({ populate: populateRole });
+
+    User.find.mockReturnValue({ populate: populateSite });
+
+    const response = createMockResponse();
+
+    await getUsers({}, response);
+
+    expect(User.find).toHaveBeenCalledWith(
+      { isActive: { $ne: false } },
+      expect.stringContaining("name email role")
+    );
+    expect(populateSite).toHaveBeenCalledWith("site", "name companyName");
+    expect(populateRole).toHaveBeenCalledWith(
+      "roleId",
+      "key name dashboardType scopeStrategy homeModuleKey"
+    );
+    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(response.json).toHaveBeenCalledWith(rows);
   });
 });
