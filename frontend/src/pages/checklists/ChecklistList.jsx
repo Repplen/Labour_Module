@@ -397,35 +397,52 @@ export default function ChecklistList() {
         : [];
       const failedCount = Number(response.data?.failedCount || 0);
       const skippedCount = Number(response.data?.skippedCount ?? skippedRows.length);
+      const ignoredRows = Number(response.data?.ignoredRows || 0);
+      const generatedTaskCount = Number(response.data?.generatedTaskCount || 0);
+      const schedulerSkipped = response.data?.schedulerSkipped === true;
       const skippedDetails = skippedRows
         .map((row) => {
-          const checklistNumber = String(row.checklistNumber || "").trim();
-          return checklistNumber
-            ? `Row ${row.rowNumber}: Checklist "${checklistNumber}" already exists`
-            : `Row ${row.rowNumber}: ${row.message || "Checklist already exists"}`;
+          const message = row.message || "Checklist already exists";
+          return `Row ${row.rowNumber}: ${message}`;
         })
         .join("\n");
       const failedDetails = failedRows
         .map((row) => `Row ${row.rowNumber}: ${row.message}`)
         .join("\n");
+      const ignoredRowsMessage = ignoredRows
+        ? `(${ignoredRows} template or empty row${ignoredRows === 1 ? "" : "s"} ignored)`
+        : "";
+      const alertLines = [
+        "Import completed.",
+        "",
+        `${createdCount} checklist master${createdCount === 1 ? "" : "s"} created.`,
+        `${generatedTaskCount} generated task${generatedTaskCount === 1 ? "" : "s"} created.`,
+        "",
+        "Summary:",
+        `• ${skippedCount} row${skippedCount === 1 ? "" : "s"} skipped (already exist)`,
+        `• ${failedCount} row${failedCount === 1 ? "" : "s"} failed`,
+      ];
 
-      alert(
-        [
-          `Import completed.`,
+      if (schedulerSkipped) {
+        alertLines.push(
           "",
-          `${createdCount} checklist master${createdCount === 1 ? "" : "s"} created.`,
-          "",
-          "Summary:",
-          `• ${skippedCount} row${skippedCount === 1 ? "" : "s"} skipped (already exist)`,
-          `• ${failedCount} row${failedCount === 1 ? "" : "s"} failed due to errors`,
-          skippedDetails ? `\nSkipped rows:\n${skippedDetails}` : "",
-          failedDetails ? `\nFailed rows:\n${failedDetails}` : "",
-          "",
-          "Tip:",
-          "• Remove duplicate checklist numbers before importing",
-          "• Ensure Assigned Site and Employee mapping is correct",
-        ].join("\n")
-      );
+          "Task generation was already running. New checklist tasks will be picked up by the scheduler."
+        );
+      }
+
+      if (ignoredRowsMessage) {
+        alertLines.push("", ignoredRowsMessage);
+      }
+
+      if (skippedDetails) {
+        alertLines.push("", "Skipped rows:", skippedDetails);
+      }
+
+      if (failedDetails) {
+        alertLines.push("", "Failed rows:", failedDetails);
+      }
+
+      alert(alertLines.join("\n"));
 
       setReloadToken((currentValue) => currentValue + 1);
     } catch (err) {
