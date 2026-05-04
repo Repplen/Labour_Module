@@ -130,7 +130,8 @@ const checklistExcelColumns = [
   { header: "Base Mark", key: "baseMark", width: 12 },
   { header: "Delay Penalty / Day", key: "delayPenaltyPerDay", width: 20, aliases: ["Delay Penalty Per Day"] },
   { header: "Advance Bonus / Day", key: "advanceBonusPerDay", width: 20, aliases: ["Advance Bonus Per Day"] },
-  { header: "Source Site", key: "sourceSite", width: 30, aliases: ["Assigned Site", "Checklist Source Site"] },
+  { header: "Source Site", key: "sourceSite", width: 30, aliases: ["Checklist Source Site"] },
+  { header: "Assigned Site", key: "assignedSite", width: 30, aliases: ["Employee Assigned Site", "Task Assigned Site", "Source Site"] },
   { header: "Employee", key: "assignedEmployeeCode", width: 30, aliases: ["Assign To Employee"] },
   { header: "Priority", key: "priority", width: 12 },
   { header: "Schedule", key: "scheduleType", width: 14, aliases: ["Schedule Type"] },
@@ -177,7 +178,7 @@ const reportMarkFormatter = new Intl.NumberFormat("en-IN", {
 
 const requiredChecklistImportKeys = [
   "checklistName",
-  "sourceSite",
+  "assignedSite",
   "assignedEmployeeCode",
   "scheduleType",
   "startDate",
@@ -1904,6 +1905,79 @@ const buildChecklistLookup = (checklists = []) => {
   return checklistLookup;
 };
 
+const normalizeDuplicateId = (value) =>
+  normalizeText(value?._id || value).toLowerCase();
+
+const normalizeDuplicateDate = (value) => {
+  if (!value) return "";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toISOString();
+};
+
+const normalizeDuplicateNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? Math.round(parsedValue * 100) / 100 : null;
+};
+
+const normalizeDuplicateItems = (items = []) =>
+  (Array.isArray(items) ? items : []).map((item) => ({
+    label: normalizeLookupKey(item?.label),
+    detail: normalizeLookupKey(item?.detail),
+    isRequired: item?.isRequired !== false,
+  }));
+
+const normalizeDuplicateApprovals = (approvals = []) =>
+  (Array.isArray(approvals) ? approvals : [])
+    .map((row) => ({
+      approvalLevel: Number(row?.approvalLevel) || 0,
+      approvalEmployee: normalizeDuplicateId(row?.approvalEmployee),
+    }))
+    .filter((row) => row.approvalEmployee)
+    .sort((left, right) => left.approvalLevel - right.approvalLevel)
+    .map((row) => row.approvalEmployee);
+
+const buildChecklistImportDuplicateSignature = (checklist = {}) =>
+  JSON.stringify({
+    checklistName: normalizeLookupKey(checklist.checklistName),
+    checklistSourceSite: normalizeDuplicateId(checklist.checklistSourceSite),
+    assignedToEmployee: normalizeDuplicateId(checklist.assignedToEmployee),
+    employeeAssignedSite: normalizeDuplicateId(checklist.employeeAssignedSite),
+    priority: normalizeLookupKey(checklist.priority || "medium"),
+    scheduleType: normalizeLookupKey(checklist.scheduleType),
+    startDate: normalizeDuplicateDate(checklist.startDate),
+    scheduleTime: normalizeLookupKey(checklist.scheduleTime),
+    endDate: normalizeDuplicateDate(checklist.endDate),
+    endTime: normalizeLookupKey(checklist.endTime),
+    enableMark: checklist.enableMark === true,
+    baseMark: checklist.enableMark ? normalizeDuplicateNumber(checklist.baseMark) : null,
+    delayPenaltyPerDay: checklist.enableMark
+      ? normalizeDuplicateNumber(checklist.delayPenaltyPerDay)
+      : null,
+    advanceBonusPerDay: checklist.enableMark
+      ? normalizeDuplicateNumber(checklist.advanceBonusPerDay)
+      : null,
+    customRepeatInterval: Number(checklist.customRepeatInterval || 1) || 1,
+    customRepeatUnit: normalizeLookupKey(checklist.customRepeatUnit || "daily"),
+    repeatDayOfMonth: Number(checklist.repeatDayOfMonth || 0) || null,
+    repeatDayOfWeek: normalizeLookupKey(checklist.repeatDayOfWeek),
+    repeatMonthOfYear: Number(checklist.repeatMonthOfYear || 0) || null,
+    approvalHierarchy: normalizeLookupKey(checklist.approvalHierarchy || "default"),
+    approvals: normalizeDuplicateApprovals(checklist.approvals),
+    isDependentTask: checklist.isDependentTask === true,
+    dependencyChecklistId: normalizeDuplicateId(checklist.dependencyChecklistId),
+    dependencyTaskNumber: normalizeLookupKey(checklist.dependencyTaskNumber),
+    targetDayCount: checklist.isDependentTask
+      ? normalizeDuplicateNumber(checklist.targetDayCount)
+      : null,
+    checklistItems: normalizeDuplicateItems(checklist.checklistItems),
+    status: checklist.status !== false,
+  });
+
 const getWorksheetOrDefault = (workbook) =>
   workbook.getWorksheet(CHECKLIST_EXCEL_SHEET_NAME) || workbook.worksheets[0] || null;
 
@@ -1951,6 +2025,43 @@ const parseChecklistImportDateTimeFromCells = (dateValue, timeValue) =>
 const isChecklistImportRowEmpty = (row, headerMap) =>
   checklistExcelColumns.every((column) => !getCellText(getWorksheetCellValue(row, headerMap, column.key)));
 
+const isChecklistImportTemplateRow = (row, headerMap) => {
+  const checklistNumber = normalizeLookupKey(
+    getWorksheetCellValue(row, headerMap, "checklistNumber")
+  );
+  const checklistName = normalizeLookupKey(
+    getWorksheetCellValue(row, headerMap, "checklistName")
+  );
+  const sourceSite = normalizeLookupKey(getWorksheetCellValue(row, headerMap, "sourceSite"));
+  const assignedEmployee = normalizeLookupKey(
+    getWorksheetCellValue(row, headerMap, "assignedEmployeeCode")
+  );
+
+  if (checklistNumber === "cl-001" && checklistName === "daily safety checklist") {
+    return true;
+  }
+
+  return (
+    ["auto number", "use existing or new checklist number"].includes(checklistNumber) ||
+    checklistName === "enter checklist name" ||
+    sourceSite === "use exact site name" ||
+    assignedEmployee === "employee must exist"
+  );
+};
+
+const isChecklistImportDataRow = (row, headerMap) => {
+  if (isChecklistImportRowEmpty(row, headerMap)) return false;
+
+  const checklistName = getCellText(getWorksheetCellValue(row, headerMap, "checklistName"));
+
+  if (!checklistName) return false;
+  return !isChecklistImportTemplateRow(row, headerMap);
+};
+
+const isChecklistImportPartialRow = (row, headerMap) =>
+  !isChecklistImportRowEmpty(row, headerMap) &&
+  !isChecklistImportTemplateRow(row, headerMap);
+
 const buildChecklistItemsCellValue = (items = []) =>
   (Array.isArray(items) ? items : [])
     .map((item) =>
@@ -1978,9 +2089,9 @@ const parseChecklistItemsCellValue = (value) =>
     })
     .filter((item) => item.label);
 
-const buildApprovalCodesCellValue = (approvals = []) =>
+const buildApprovalEmployeeDisplayCellValue = (approvals = []) =>
   (Array.isArray(approvals) ? approvals : [])
-    .map((row) => normalizeText(row?.approvalEmployee?.employeeCode))
+    .map((row) => formatEmployeeDisplayName(row?.approvalEmployee))
     .filter(Boolean)
     .join(" | ");
 
@@ -3555,6 +3666,7 @@ exports.exportChecklistsExcel = async (req, res) => {
       delayPenaltyPerDay: "0.5",
       advanceBonusPerDay: "0.5",
       sourceSite: "Head Office",
+      assignedSite: "Head Office",
       assignedEmployeeCode: "EMP001 - Priya Sharma",
       priority: "medium",
       scheduleType: "daily",
@@ -3564,7 +3676,7 @@ exports.exportChecklistsExcel = async (req, res) => {
       endTime: "18:00",
       nextTask: "",
       checklistItems: "Is the floor clean?::Check all work areas::yes | Record meter reading::::yes",
-      approvalEmployeeCodes: "EMP002",
+      approvalEmployeeCodes: "EMP002 - Ramesh Kumar",
       dependencyTaskNumber: "No",
       status: "Active",
     });
@@ -3578,6 +3690,7 @@ exports.exportChecklistsExcel = async (req, res) => {
       delayPenaltyPerDay: "Required when Scoring is Enabled",
       advanceBonusPerDay: "Required when Scoring is Enabled",
       sourceSite: "Use exact Site name",
+      assignedSite: "Use exact employee assigned site name",
       assignedEmployeeCode: "Employee must exist",
       priority: "high / medium / low",
       scheduleType: "daily / weekly / monthly / yearly / custom",
@@ -3587,7 +3700,8 @@ exports.exportChecklistsExcel = async (req, res) => {
       endTime: "Time format: HH:mm",
       nextTask: "Leave blank during import",
       checklistItems: "Optional. Format: Question::Detail::yes/no. Separate multiple with |",
-      approvalEmployeeCodes: "Custom approver employee code(s), separate multiple with |",
+      approvalEmployeeCodes:
+        "Custom approver employee(s), use Employee Code or Code - Name. Separate multiple with |",
       dependencyTaskNumber: "No or previous checklist number",
       status: "Active / Inactive",
     });
@@ -3605,7 +3719,8 @@ exports.exportChecklistsExcel = async (req, res) => {
         advanceBonusPerDay: checklist.enableMark ? checklist.advanceBonusPerDay ?? "" : "",
         sourceSite:
           normalizeText(checklist.checklistSourceSite?.name) ||
-          normalizeText(checklist.employeeAssignedSite?.name),
+          "",
+        assignedSite: normalizeText(checklist.employeeAssignedSite?.name),
         assignedEmployeeCode: formatEmployeeDisplayName(checklist.assignedToEmployee),
         priority: normalizeText(checklist.priority),
         scheduleType: normalizeText(checklist.scheduleType),
@@ -3617,7 +3732,7 @@ exports.exportChecklistsExcel = async (req, res) => {
         checklistItems: buildChecklistItemsCellValue(checklist.checklistItems),
         approvalEmployeeCodes:
           checklist.approvalHierarchy === "custom"
-            ? buildApprovalCodesCellValue(checklist.approvals)
+            ? buildApprovalEmployeeDisplayCellValue(checklist.approvals)
             : "Default",
         dependencyTaskNumber: formatChecklistDependencyExcelLabel(checklist),
         status: formatChecklistStatusLabel(checklist.status),
@@ -3692,23 +3807,74 @@ exports.importChecklistsExcel = async (req, res) => {
           restrictedSiteId ? { employeeAssignedSite: restrictedSiteId } : {},
           await buildChecklistMasterScopeFilter(req.access || {})
         ),
-        "_id checklistNumber checklistName employeeAssignedSite"
+        [
+          "_id",
+          "checklistNumber",
+          "checklistName",
+          "checklistSourceSite",
+          "assignedToEmployee",
+          "employeeAssignedSite",
+          "priority",
+          "scheduleType",
+          "startDate",
+          "scheduleTime",
+          "endDate",
+          "endTime",
+          "enableMark",
+          "baseMark",
+          "delayPenaltyPerDay",
+          "advanceBonusPerDay",
+          "customRepeatInterval",
+          "customRepeatUnit",
+          "repeatDayOfMonth",
+          "repeatDayOfWeek",
+          "repeatMonthOfYear",
+          "approvalHierarchy",
+          "approvals",
+          "isDependentTask",
+          "dependencyChecklistId",
+          "dependencyTaskNumber",
+          "targetDayCount",
+          "checklistItems",
+          "status",
+        ].join(" ")
       ).lean(),
     ]);
 
     const siteLookup = buildSiteLookup(sites);
     const employeeLookup = buildEmployeeLookup(employees);
     const checklistLookup = buildChecklistLookup(checklists);
+    const checklistDuplicateLookup = new Map();
+
+    checklists.forEach((checklist) => {
+      const duplicateSignature = buildChecklistImportDuplicateSignature(checklist);
+
+      if (!checklistDuplicateLookup.has(duplicateSignature)) {
+        checklistDuplicateLookup.set(duplicateSignature, checklist);
+      }
+    });
+
     const defaultSite = restrictedSiteId && sites.length === 1 ? sites[0] : null;
     const failedRows = [];
     const skippedRows = [];
     const createdChecklistIds = [];
     let processedCount = 0;
+    let ignoredRows = 0;
 
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
       const row = worksheet.getRow(rowNumber);
 
-      if (isChecklistImportRowEmpty(row, headerMap)) {
+      if (!isChecklistImportDataRow(row, headerMap)) {
+        if (isChecklistImportPartialRow(row, headerMap)) {
+          processedCount += 1;
+          failedRows.push({
+            rowNumber,
+            message:
+              "Checklist Name is required. Check that the row values are aligned under the correct headers.",
+          });
+        } else {
+          ignoredRows += 1;
+        }
         continue;
       }
 
@@ -3716,17 +3882,12 @@ exports.importChecklistsExcel = async (req, res) => {
 
       const checklistNumberValue = getWorksheetCellValue(row, headerMap, "checklistNumber");
       const checklistNumber = getCellText(checklistNumberValue);
-
-      if (checklistNumber && checklistLookup.has(normalizeLookupKey(checklistNumber))) {
-        skippedRows.push({
-          rowNumber,
-          checklistNumber,
-          message: `Checklist "${checklistNumber}" already exists`,
-        });
-        continue;
-      }
+      const existingChecklistForNumber = checklistNumber
+        ? checklistLookup.get(normalizeLookupKey(checklistNumber))
+        : null;
 
       const sourceSiteValue = getWorksheetCellValue(row, headerMap, "sourceSite");
+      const assignedSiteValue = getWorksheetCellValue(row, headerMap, "assignedSite");
       const assignedEmployeeCodeValue = getWorksheetCellValue(
         row,
         headerMap,
@@ -3744,19 +3905,29 @@ exports.importChecklistsExcel = async (req, res) => {
       );
 
       const assignedSite =
-        siteLookup.get(normalizeLookupKey(sourceSiteValue)) ||
-        (!getCellText(sourceSiteValue) ? defaultSite : null);
+        siteLookup.get(normalizeLookupKey(assignedSiteValue)) ||
+        (!getCellText(assignedSiteValue) ? defaultSite : null);
 
       if (!assignedSite) {
+        failedRows.push({
+          rowNumber,
+          message: "Assigned Site is invalid or not available to this user",
+        });
+        continue;
+      }
+
+      const sourceSiteText = getCellText(sourceSiteValue);
+      const sourceSite = sourceSiteText
+        ? siteLookup.get(normalizeLookupKey(sourceSiteValue))
+        : null;
+
+      if (sourceSiteText && !sourceSite) {
         failedRows.push({
           rowNumber,
           message: "Source Site is invalid or not available to this user",
         });
         continue;
       }
-
-      const sourceSiteText = getCellText(sourceSiteValue);
-      const sourceSite = sourceSiteText ? assignedSite : null;
 
       const assignedEmployee = employeeLookup.get(
         normalizeLookupKey(assignedEmployeeCodeValue)
@@ -3879,7 +4050,7 @@ exports.importChecklistsExcel = async (req, res) => {
       }
 
       const importPayload = {
-        checklistNumber,
+        checklistNumber: existingChecklistForNumber ? "" : checklistNumber,
         checklistName: getCellText(getWorksheetCellValue(row, headerMap, "checklistName")),
         checklistSourceSite: sourceSite?._id || "",
         assignedToEmployee: assignedEmployee._id,
@@ -3926,6 +4097,31 @@ exports.importChecklistsExcel = async (req, res) => {
         continue;
       }
 
+      const duplicateSignature = buildChecklistImportDuplicateSignature({
+        ...validationResult.payload,
+        status,
+      });
+      const existingDuplicateChecklist = checklistDuplicateLookup.get(duplicateSignature);
+
+      if (existingDuplicateChecklist) {
+        const existingChecklistNumber = normalizeText(
+          existingDuplicateChecklist.checklistNumber
+        );
+
+        skippedRows.push({
+          rowNumber,
+          checklistNumber:
+            existingChecklistNumber ||
+            normalizeText(validationResult.payload?.checklistNumber) ||
+            checklistNumber ||
+            "Unknown",
+          message: existingChecklistNumber
+            ? `Checklist "${existingChecklistNumber}" already has the same task details`
+            : "A checklist with the same task details already exists",
+        });
+        continue;
+      }
+
       try {
         const checklist = await Checklist.create({
           ...validationResult.payload,
@@ -3938,6 +4134,12 @@ exports.importChecklistsExcel = async (req, res) => {
           _id: checklist._id,
           checklistNumber: checklist.checklistNumber,
           employeeAssignedSite: checklist.employeeAssignedSite,
+        });
+        checklistDuplicateLookup.set(duplicateSignature, {
+          ...validationResult.payload,
+          _id: checklist._id,
+          checklistNumber: checklist.checklistNumber,
+          status,
         });
       } catch (err) {
         if (err?.code === 11000) {
@@ -3966,16 +4168,19 @@ exports.importChecklistsExcel = async (req, res) => {
       return res.status(400).json({ message: "No checklist rows found in the Excel file" });
     }
 
-    if (createdChecklistIds.length) {
-      await runChecklistScheduler({ checklistIds: createdChecklistIds });
-    }
+    const schedulerResult = createdChecklistIds.length
+      ? await runChecklistScheduler({ checklistIds: createdChecklistIds })
+      : { created: 0, processed: 0, skipped: false };
 
     return res.json({
       message: "Checklist import completed",
       processedCount,
       createdCount: createdChecklistIds.length,
+      generatedTaskCount: Number(schedulerResult?.created || 0),
+      schedulerSkipped: schedulerResult?.skipped === true,
       skippedCount: skippedRows.length,
       failedCount: failedRows.length,
+      ignoredRows,
       skippedRows,
       failedRows,
       failures: failedRows,
