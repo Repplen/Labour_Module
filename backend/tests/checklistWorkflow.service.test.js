@@ -1,4 +1,9 @@
-const { applyTaskSubmission } = require("../services/checklistWorkflow.service");
+const Checklist = require("../models/Checklist");
+const {
+  applyTaskSubmission,
+  buildArchivedChecklistNumber,
+  releaseSoftDeletedChecklistNumber,
+} = require("../services/checklistWorkflow.service");
 
 const toDocument = (value) => ({
   ...value,
@@ -124,6 +129,57 @@ describe("checklist workflow submission", () => {
         status: 400,
         message: expect.stringContaining("must be answered"),
       })
+    );
+  });
+});
+
+describe("soft-deleted checklist numbers", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test("builds an archived number that preserves the original visible number", () => {
+    expect(buildArchivedChecklistNumber("AMR - 001", "checklist-id")).toBe(
+      "AMR - 001__deleted__checklist-id"
+    );
+  });
+
+  test("archives a matching soft-deleted checklist number before reuse", async () => {
+    const deletedChecklistId = "507f1f77bcf86cd799439011";
+    const findOneSpy = jest.spyOn(Checklist.collection, "findOne").mockResolvedValue({
+      _id: deletedChecklistId,
+      checklistNumber: "AMR - 001",
+    });
+    const updateOneSpy = jest
+      .spyOn(Checklist.collection, "updateOne")
+      .mockResolvedValue({ modifiedCount: 1 });
+
+    const result = await releaseSoftDeletedChecklistNumber("AMR - 001");
+
+    expect(result).toBe("AMR - 001__deleted__507f1f77bcf86cd799439011");
+    expect(findOneSpy).toHaveBeenCalledWith(
+      {
+        checklistNumber: "AMR - 001",
+        isDeleted: true,
+      },
+      {
+        projection: {
+          _id: 1,
+          checklistNumber: 1,
+        },
+      }
+    );
+    expect(updateOneSpy).toHaveBeenCalledWith(
+      {
+        _id: deletedChecklistId,
+        checklistNumber: "AMR - 001",
+        isDeleted: true,
+      },
+      {
+        $set: {
+          checklistNumber: "AMR - 001__deleted__507f1f77bcf86cd799439011",
+        },
+      }
     );
   });
 });

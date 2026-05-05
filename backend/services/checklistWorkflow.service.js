@@ -169,6 +169,52 @@ const getRestrictedChecklistSiteId = (user) => {
 
 const normalizeText = (value) => String(value || "").trim();
 
+const buildArchivedChecklistNumber = (checklistNumber, checklistId) => {
+  const baseNumber = normalizeText(checklistNumber) || "deleted-checklist";
+  const idPart = normalizeText(checklistId) || String(Date.now());
+  return `${baseNumber}__deleted__${idPart}`;
+};
+
+const releaseSoftDeletedChecklistNumber = async (checklistNumber) => {
+  const normalizedChecklistNumber = normalizeText(checklistNumber);
+  if (!normalizedChecklistNumber) return null;
+
+  const deletedChecklist = await Checklist.collection.findOne(
+    {
+      checklistNumber: normalizedChecklistNumber,
+      isDeleted: true,
+    },
+    {
+      projection: {
+        _id: 1,
+        checklistNumber: 1,
+      },
+    }
+  );
+
+  if (!deletedChecklist?._id) return null;
+
+  const archivedChecklistNumber = buildArchivedChecklistNumber(
+    deletedChecklist.checklistNumber,
+    deletedChecklist._id
+  );
+
+  await Checklist.collection.updateOne(
+    {
+      _id: deletedChecklist._id,
+      checklistNumber: deletedChecklist.checklistNumber,
+      isDeleted: true,
+    },
+    {
+      $set: {
+        checklistNumber: archivedChecklistNumber,
+      },
+    }
+  );
+
+  return archivedChecklistNumber;
+};
+
 const normalizeIdList = (value) =>
   (Array.isArray(value) ? value : [value])
     .map((item) => normalizeText(item?._id || item))
@@ -2323,6 +2369,7 @@ module.exports = {
   TASK_TIMELINESS_STATUSES,
   applyChecklistDecision,
   applyTaskSubmission,
+  buildArchivedChecklistNumber,
   buildTaskNumber,
   canAccessChecklistTask,
   checklistPopulateQuery,
@@ -2340,6 +2387,7 @@ module.exports = {
   resolveMarkConfig,
   runDependentChecklistScheduler,
   runChecklistScheduler,
+  releaseSoftDeletedChecklistNumber,
   syncChecklistTaskDependencies,
   startChecklistScheduler,
   stopChecklistScheduler,

@@ -27,6 +27,7 @@ const {
   TASK_TIMELINESS_STATUSES,
   applyChecklistDecision,
   applyTaskSubmission,
+  buildArchivedChecklistNumber,
   canAccessChecklistTask,
   hasChecklistMasterAccess,
   checklistPopulateQuery,
@@ -40,6 +41,7 @@ const {
   parseDateBoundary,
   runChecklistScheduler,
   runDependentChecklistScheduler,
+  releaseSoftDeletedChecklistNumber,
   syncChecklistTaskDependencies,
   validateChecklistPayload,
 } = require("../services/checklistWorkflow.service");
@@ -1563,6 +1565,8 @@ const approveChecklistAdminRequestRecord = async ({ request, reviewer, remarks =
 
   if (request.moduleKey === CHECKLIST_REQUEST_MODULE_KEYS.checklistMaster) {
     if (request.actionType === CHECKLIST_REQUEST_ACTIONS.add) {
+      await releaseSoftDeletedChecklistNumber(request.requestPayload?.checklistNumber);
+
       const checklist = await Checklist.create({
         ...request.requestPayload,
         createdBy: request.requestedBy || null,
@@ -1585,6 +1589,7 @@ const approveChecklistAdminRequestRecord = async ({ request, reviewer, remarks =
       Object.assign(checklist, request.requestPayload, {
         lastGeneratedAt: latestTask?.occurrenceDate || null,
       });
+      await releaseSoftDeletedChecklistNumber(checklist.checklistNumber);
       await checklist.save();
       await syncChecklistTaskDependencies({
         checklistIds: [checklist._id],
@@ -3338,6 +3343,8 @@ exports.createChecklist = async (req, res) => {
       });
     }
 
+    await releaseSoftDeletedChecklistNumber(validationResult.payload.checklistNumber);
+
     const checklist = await Checklist.create({
       ...validationResult.payload,
       createdBy: req.user?.id || null,
@@ -3430,6 +3437,7 @@ exports.updateChecklist = async (req, res) => {
     Object.assign(checklist, validationResult.payload, {
       lastGeneratedAt: latestTask?.occurrenceDate || null,
     });
+    await releaseSoftDeletedChecklistNumber(checklist.checklistNumber);
     await checklist.save();
     await syncChecklistTaskDependencies({
       checklistIds: [checklist._id],
@@ -3536,6 +3544,10 @@ exports.deleteChecklist = async (req, res) => {
     checklist.isActive = false;
     checklist.isDeleted = true;
     checklist.deletedAt = new Date();
+    checklist.checklistNumber = buildArchivedChecklistNumber(
+      checklist.checklistNumber,
+      checklist._id
+    );
     checklist.updatedBy = req.user?.id || checklist.updatedBy || null;
     await checklist.save();
 
@@ -3572,7 +3584,7 @@ exports.bulkDeleteChecklists = async (req, res) => {
         await buildChecklistMasterScopeFilter(req.access || {}),
         restrictedSiteId ? { employeeAssignedSite: restrictedSiteId } : {}
       ),
-      "_id"
+      "_id checklistNumber"
     ).lean();
 
     if (!existingChecklists.length) {
@@ -3598,22 +3610,34 @@ exports.bulkDeleteChecklists = async (req, res) => {
       });
     }
 
-    await Checklist.updateMany(
-      mergeQueryFilters(
-        { _id: { $in: deletableChecklistIds } },
-        await buildChecklistMasterScopeFilter(req.access || {}),
-        restrictedSiteId ? { employeeAssignedSite: restrictedSiteId } : {}
-      ),
-      {
-        $set: {
-          status: false,
-          isActive: false,
-          isDeleted: true,
-          deletedAt: new Date(),
-          updatedBy: req.user?.id || null,
-        },
-      }
+    const checklistById = new Map(
+      existingChecklists.map((checklist) => [normalizeText(checklist._id), checklist])
     );
+    const deletedAt = new Date();
+    const bulkOperations = deletableChecklistIds.map((checklistId) => {
+      const checklist = checklistById.get(normalizeText(checklistId)) || {};
+
+      return {
+        updateOne: {
+          filter: { _id: checklistId },
+          update: {
+            $set: {
+              status: false,
+              isActive: false,
+              isDeleted: true,
+              deletedAt,
+              checklistNumber: buildArchivedChecklistNumber(
+                checklist.checklistNumber,
+                checklistId
+              ),
+              updatedBy: req.user?.id || null,
+            },
+          },
+        },
+      };
+    });
+
+    await Checklist.bulkWrite(bulkOperations);
 
     return res.json({
       success: true,
@@ -4123,6 +4147,8 @@ exports.importChecklistsExcel = async (req, res) => {
       }
 
       try {
+        await releaseSoftDeletedChecklistNumber(validationResult.payload.checklistNumber);
+
         const checklist = await Checklist.create({
           ...validationResult.payload,
           status,
