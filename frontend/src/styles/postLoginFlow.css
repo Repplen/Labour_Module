@@ -7,15 +7,38 @@
   padding: 2rem 1rem;
   overflow: hidden;
   isolation: isolate;
+  background: linear-gradient(145deg, #081522 0%, #102437 42%, #122d42 100%);
+}
+
+.post-login-flow::before,
+.post-login-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.post-login-flow::before {
+  z-index: 0;
+  inset: -4%;
+  background: url("../images/welcome.jpg") center / cover no-repeat;
+  transform: scale(1.04);
+  animation: welcomeBackgroundMotion 26s ease-in-out infinite alternate;
+  will-change: transform, background-position;
+}
+
+.post-login-flow::after {
+  z-index: 0;
   background:
+    linear-gradient(135deg, rgba(5, 13, 23, 0.78), rgba(10, 28, 43, 0.7)),
     radial-gradient(circle at top left, rgba(72, 187, 255, 0.24), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(255, 125, 95, 0.22), transparent 36%),
-    linear-gradient(145deg, #081522 0%, #102437 42%, #122d42 100%);
+    radial-gradient(circle at bottom right, rgba(255, 125, 95, 0.22), transparent 36%);
 }
 
 .post-login-flow__bg {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
 }
 
@@ -69,7 +92,7 @@
 .post-login-flow__frame {
   position: relative;
   width: min(980px, 100%);
-  z-index: 1;
+  z-index: 2;
 }
 
 .post-login-flow__card {
@@ -678,6 +701,23 @@
   }
 }
 
+@keyframes welcomeBackgroundMotion {
+  0% {
+    background-position: 50% 50%;
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+
+  50% {
+    background-position: 54% 47%;
+    transform: scale(1.08) translate3d(-1.2%, -0.8%, 0);
+  }
+
+  100% {
+    background-position: 47% 53%;
+    transform: scale(1.06) translate3d(1%, 0.8%, 0);
+  }
+}
+
 @keyframes statusPulse {
   0% {
     box-shadow: 0 0 0 0 rgba(100, 255, 218, 0.48);
@@ -779,6 +819,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .post-login-flow::before,
   .post-login-flow__orb,
   .intro-slider__status-dot,
   .intro-slider__track,
@@ -789,5 +830,9 @@
   .intro-slider__skip-btn {
     animation: none !important;
     transition: none !important;
+  }
+
+  .post-login-flow::before {
+    transform: scale(1.04);
   }
 }
