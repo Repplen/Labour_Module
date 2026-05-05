@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   exportComplaintReport,
@@ -7,6 +7,7 @@ import {
   updateComplaint,
 } from "../../api/complaintApi";
 import ComplaintDetailPanel from "../../components/complaints/ComplaintDetailPanel";
+import ComplaintProcessTracker from "../../components/complaints/ComplaintProcessTracker";
 import {
   buildComplaintQueryParams,
   buildComplaintRequestParams,
@@ -16,6 +17,7 @@ import {
   parseComplaintFiltersFromSearchParams,
   toggleComplaintSort,
 } from "../../utils/complaintReporting";
+import { getComplaintProcessState } from "../../utils/complaintLifecycle";
 import "../../styles/complaintsWorkspace.css";
 
 const emptyReportData = {
@@ -76,6 +78,12 @@ export default function ComplaintsReport() {
   const [exportingFormat, setExportingFormat] = useState("");
   const [loadError, setLoadError] = useState("");
   const [clockNow, setClockNow] = useState(() => new Date());
+  const [expandedProcessId, setExpandedProcessId] = useState("");
+  const [timelineHighlighted, setTimelineHighlighted] = useState(false);
+  const timelineRef = useRef(null);
+  const scrollTimerRef = useRef(null);
+  const highlightTimerRef = useRef(null);
+  const pendingTimelineScrollRef = useRef(false);
 
   useEffect(() => {
     setFilters(appliedFilters);
@@ -88,6 +96,13 @@ export default function ComplaintsReport() {
 
     return () => {
       window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(scrollTimerRef.current);
+      window.clearTimeout(highlightTimerRef.current);
     };
   }, []);
 
@@ -141,11 +156,35 @@ export default function ComplaintsReport() {
     if (!selectedComplaintId) {
       setSelectedComplaint(null);
       setActionRemark("");
+      pendingTimelineScrollRef.current = false;
       return;
     }
 
     void loadComplaintDetail(selectedComplaintId);
   }, [selectedComplaintId]);
+
+  const scrollToTimeline = useCallback(() => {
+    setTimelineHighlighted(false);
+    window.clearTimeout(scrollTimerRef.current);
+    window.clearTimeout(highlightTimerRef.current);
+    scrollTimerRef.current = window.setTimeout(() => {
+      timelineRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setTimelineHighlighted(true);
+      highlightTimerRef.current = window.setTimeout(() => {
+        setTimelineHighlighted(false);
+      }, 1500);
+    }, 100);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingTimelineScrollRef.current || detailLoading || !selectedComplaint) return;
+
+    pendingTimelineScrollRef.current = false;
+    scrollToTimeline();
+  }, [detailLoading, scrollToTimeline, selectedComplaint]);
 
   const applyFilters = () => {
     if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) {
@@ -165,11 +204,21 @@ export default function ComplaintsReport() {
     const nextParams = buildComplaintQueryParams(appliedFilters);
     nextParams.set("complaintId", complaintId);
     setSearchParams(nextParams);
+    pendingTimelineScrollRef.current = true;
+
+    if (complaintId === selectedComplaintId && timelineRef.current) {
+      pendingTimelineScrollRef.current = false;
+      scrollToTimeline();
+    }
   };
 
   const clearSelectedComplaint = () => {
     const nextParams = buildComplaintQueryParams(appliedFilters);
     setSearchParams(nextParams);
+  };
+
+  const toggleProcessRow = (complaintId) => {
+    setExpandedProcessId((currentId) => (currentId === complaintId ? "" : complaintId));
   };
 
   const handleSort = (field) => {
@@ -593,51 +642,80 @@ export default function ComplaintsReport() {
                   </td>
                 </tr>
               ) : (
-                reportData.rows.map((row, index) => (
-                  <tr
-                    key={row._id}
-                    className={`${row.isOverdue ? "table-danger" : ""} ${
-                      row._id === selectedComplaintId ? "complaint-report-table__row--active" : ""
-                    }`}
-                  >
-                    <td>{index + 1}</td>
-                    <td className="fw-semibold">{row.complaintCode}</td>
-                    <td>
-                      <div className="fw-semibold">{row.employeeLabel || row.employeeName}</div>
-                    </td>
-                    <td>{row.companyName || "-"}</td>
-                    <td>{row.siteDisplayName || "-"}</td>
-                    <td>{row.departmentName || "-"}</td>
-                    <td className="complaint-report-table__description">{row.complaintText || "-"}</td>
-                    <td>{row.raisedAtLabel || "-"}</td>
-                    <td>{row.currentLevelLabel || "-"}</td>
-                    <td>
-                      <div className="fw-semibold">{row.businessStatusLabel || "-"}</div>
-                      <div className="small text-muted">{row.workflowStatusLabel || "-"}</div>
-                    </td>
-                    <td>
-                      <div className={row.isOverdue ? "text-danger fw-semibold" : ""}>
-                        {row.overdueStatusLabel || "-"}
-                      </div>
-                      <div className={`small ${row.isOverdue ? "text-danger" : "text-muted"}`}>
-                        {row.slaClockLabel || "-"}
-                      </div>
-                    </td>
-                    <td>{row.completedAtLabel || "-"}</td>
-                    <td>{row.departmentHeadRemark || "-"}</td>
-                    <td>{row.siteHeadRemark || "-"}</td>
-                    <td>{row.mainAdminRemark || "-"}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() => selectComplaint(row._id)}
+                reportData.rows.map((row, index) => {
+                  const processState = getComplaintProcessState(row, clockNow);
+                  const rowIsOverdue = row.isOverdue || processState.isOverdue;
+                  const processExpanded = expandedProcessId === row._id;
+
+                  return (
+                    <Fragment key={row._id}>
+                      <tr
+                        className={`${rowIsOverdue ? "table-danger" : ""} ${
+                          row._id === selectedComplaintId ? "complaint-report-table__row--active" : ""
+                        }`}
                       >
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                        <td>{index + 1}</td>
+                        <td className="fw-semibold">{row.complaintCode}</td>
+                        <td>
+                          <div className="fw-semibold">{row.employeeLabel || row.employeeName}</div>
+                        </td>
+                        <td>{row.companyName || "-"}</td>
+                        <td>{row.siteDisplayName || "-"}</td>
+                        <td>{row.departmentName || "-"}</td>
+                        <td className="complaint-report-table__description">{row.complaintText || "-"}</td>
+                        <td>{row.raisedAtLabel || "-"}</td>
+                        <td>{row.currentLevelLabel || "-"}</td>
+                        <td>
+                          <div className="fw-semibold">{row.businessStatusLabel || "-"}</div>
+                          <div className="small text-muted">{row.workflowStatusLabel || "-"}</div>
+                        </td>
+                        <td>
+                          <div className={rowIsOverdue ? "text-danger fw-semibold" : ""}>
+                            {row.overdueStatusLabel || (processState.isOverdue ? "Overdue After 22 Hours" : "-")}
+                          </div>
+                          <div className={`small ${rowIsOverdue ? "text-danger" : "text-muted"}`}>
+                            {row.slaClockLabel || processState.helperLabel || "-"}
+                          </div>
+                        </td>
+                        <td>{row.completedAtLabel || "-"}</td>
+                        <td>{row.departmentHeadRemark || "-"}</td>
+                        <td>{row.siteHeadRemark || "-"}</td>
+                        <td>{row.mainAdminRemark || "-"}</td>
+                        <td>
+                          <div className="complaint-action-stack">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => selectComplaint(row._id)}
+                            >
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary complaint-process-toggle"
+                              onClick={() => toggleProcessRow(row._id)}
+                              aria-expanded={processExpanded}
+                              aria-label={`${processExpanded ? "Hide" : "Show"} complaint process`}
+                              title={`${processExpanded ? "Hide" : "Show"} process`}
+                            >
+                              <span className="complaint-process-toggle__eye" aria-hidden="true">
+                                <span />
+                              </span>
+                              <span>{processExpanded ? "Hide" : "Process"}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {processExpanded ? (
+                        <tr className="complaint-process-row">
+                          <td colSpan="17">
+                            <ComplaintProcessTracker complaint={row} clockNow={clockNow} />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -653,6 +731,8 @@ export default function ComplaintsReport() {
         setActionRemark={setActionRemark}
         onAction={handleAction}
         actionSaving={actionSaving}
+        timelineSectionRef={timelineRef}
+        timelineHighlighted={timelineHighlighted}
       />
     </div>
   );

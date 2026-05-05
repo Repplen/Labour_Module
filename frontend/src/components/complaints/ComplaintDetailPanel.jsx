@@ -3,6 +3,7 @@ import {
   formatComplaintDuration,
   getComplaintTimeState,
 } from "../../utils/complaintLifecycle";
+import ComplaintProcessTracker from "./ComplaintProcessTracker";
 
 const getStatusBadgeClass = (timeState) => {
   if (timeState?.isOverdue) return "text-bg-danger";
@@ -94,6 +95,8 @@ export default function ComplaintDetailPanel({
   setActionRemark,
   onAction,
   actionSaving,
+  timelineSectionRef,
+  timelineHighlighted,
 }) {
   const selectedComplaintTimeState = selectedComplaint
     ? getComplaintTimeState(selectedComplaint, clockNow)
@@ -254,104 +257,145 @@ export default function ComplaintDetailPanel({
             </span>
           </div>
 
-          <div className="row g-4">
-            <div className="col-12 col-xl-6">
-              <h6 className="mb-3">Remarks</h6>
-              {selectedComplaint.remarks?.length ? (
-                <div className="d-flex flex-column gap-3">
-                  {selectedComplaint.remarks.map((remark) => (
-                    <div key={`${remark.label}-${remark.actedAt || remark.action}`} className="border rounded p-3">
-                      <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                        <div className="fw-semibold">{remark.label}</div>
-                        <span className={`badge ${getActionBadgeClass(remark.action)}`}>
-                          {remark.actionLabel}
-                        </span>
-                      </div>
-                      <div className="small text-muted mb-2">
-                        {remark.actedByName || "-"} | {remark.actedAtLabel || "-"}
-                      </div>
-                      <div>{remark.remark || "No remark entered."}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted">No remarks added yet.</div>
-              )}
+          <ComplaintProcessTracker complaint={selectedComplaint} clockNow={clockNow} />
+
+          <div
+            ref={timelineSectionRef}
+            className={`complaint-activity-section ${timelineHighlighted ? "timeline-highlight" : ""}`}
+          >
+            <div className="complaint-activity-section__header">
+              <div>
+                <div className="page-kicker">Activity</div>
+                <h6 className="mb-1">Remarks & Timeline</h6>
+              </div>
+              <div className="complaint-activity-section__counts">
+                <span>{selectedComplaint.remarks?.length || 0} remarks</span>
+                <span>{selectedComplaint.timeline?.length || 0} timeline updates</span>
+              </div>
             </div>
 
-            <div className="col-12 col-xl-6">
-              <h6 className="mb-3">Timeline</h6>
-              {selectedComplaint.timeline?.length ? (
-                <div className="d-flex flex-column gap-3 mb-4">
-                  {selectedComplaint.timeline.map((item, index) => (
-                    <div key={`${item.level}-${item.action}-${item.actedAt || index}`} className="border rounded p-3">
-                      <div className="d-flex justify-content-between align-items-start gap-2">
-                        <div className="fw-semibold">
-                          {item.levelLabel} - {item.actionLabel}
+            <div className="row g-4">
+              <div className="col-12 col-xl-5">
+                <div className="complaint-activity-panel complaint-remarks-panel">
+                  <div className="complaint-activity-panel__title">
+                    <span>Decision Notes</span>
+                    <small>Action comments by each level</small>
+                  </div>
+                  {selectedComplaint.remarks?.length ? (
+                    <div className="complaint-remark-list">
+                      {selectedComplaint.remarks.map((remark) => (
+                        <div key={`${remark.label}-${remark.actedAt || remark.action}`} className="complaint-remark-card">
+                          <div className="complaint-remark-card__topline">
+                            <div>
+                              <div className="complaint-remark-card__label">{remark.label}</div>
+                              <div className="complaint-remark-card__meta">
+                                {remark.actedByName || "-"} | {remark.actedAtLabel || "-"}
+                              </div>
+                            </div>
+                            <span className={`badge ${getActionBadgeClass(remark.action)}`}>
+                              {remark.actionLabel}
+                            </span>
+                          </div>
+                          <div className="complaint-remark-card__body">
+                            {remark.remark || "No remark entered."}
+                          </div>
                         </div>
-                        <div className="small text-muted">{item.actedAtLabel}</div>
-                      </div>
-                      <div className="small text-muted mt-1">{item.actedByName || "-"}</div>
-                      <div className="mt-2">{item.remark || "No remark recorded."}</div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="complaint-empty-state">No remarks added yet.</div>
+                  )}
                 </div>
-              ) : (
-                <div className="text-muted mb-4">No timeline entries available.</div>
-              )}
+              </div>
 
-              {selectedComplaint.canAct ? (
-                <div className="border rounded p-3">
-                  <h6 className="mb-3">Take Action</h6>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Remark</label>
-                    <textarea
-                      className="form-control"
-                      rows="4"
-                      placeholder="Add your remark before moving this complaint ahead"
-                      value={actionRemark}
-                      onChange={(event) => setActionRemark(event.target.value)}
-                    />
+              <div className="col-12 col-xl-7">
+                <div className="complaint-activity-panel complaint-timeline-panel">
+                  <div className="complaint-activity-panel__title">
+                    <span>Progress Timeline</span>
+                    <small>Complaint route from creation to current status</small>
                   </div>
+                  {selectedComplaint.timeline?.length ? (
+                    <div className="complaint-timeline-list">
+                      {selectedComplaint.timeline.map((item, index) => (
+                        <div key={`${item.level}-${item.action}-${item.actedAt || index}`} className="complaint-timeline-step">
+                          <div className="complaint-timeline-step__marker">{index + 1}</div>
+                          <div className="complaint-timeline-step__card">
+                            <div className="complaint-timeline-step__topline">
+                              <div>
+                                <div className="complaint-timeline-step__title">
+                                  {item.levelLabel} - {item.actionLabel}
+                                </div>
+                                <div className="complaint-timeline-step__actor">
+                                  {item.actedByName || "-"}
+                                </div>
+                              </div>
+                              <div className="complaint-timeline-step__time">{item.actedAtLabel || "-"}</div>
+                            </div>
+                            <div className="complaint-timeline-step__remark">
+                              {item.remark || "No remark recorded."}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="complaint-empty-state">No timeline entries available.</div>
+                  )}
+                </div>
 
-                  <div className="d-flex flex-wrap gap-2">
-                    {selectedComplaint.availableActions?.includes("submit") ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={actionSaving}
-                        onClick={() => onAction("submit")}
-                      >
-                        {actionSaving ? "Saving..." : "Submit"}
-                      </button>
-                    ) : null}
-                    {selectedComplaint.availableActions?.includes("forward") ? (
-                      <button
-                        type="button"
-                        className="btn btn-outline-primary"
-                        disabled={actionSaving}
-                        onClick={() => onAction("forward")}
-                      >
-                        {actionSaving ? "Saving..." : "Forward"}
-                      </button>
-                    ) : null}
-                    {selectedComplaint.availableActions?.includes("complete") ? (
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        disabled={actionSaving}
-                        onClick={() => onAction("complete")}
-                      >
-                        {actionSaving ? "Saving..." : "Mark Completed"}
-                      </button>
-                    ) : null}
+                {selectedComplaint.canAct ? (
+                  <div className="complaint-action-panel">
+                    <h6 className="mb-3">Take Action</h6>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">Remark</label>
+                      <textarea
+                        className="form-control"
+                        rows="4"
+                        placeholder="Add your remark before moving this complaint ahead"
+                        value={actionRemark}
+                        onChange={(event) => setActionRemark(event.target.value)}
+                      />
+                    </div>
+
+                    <div className="d-flex flex-wrap gap-2">
+                      {selectedComplaint.availableActions?.includes("submit") ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={actionSaving}
+                          onClick={() => onAction("submit")}
+                        >
+                          {actionSaving ? "Saving..." : "Submit"}
+                        </button>
+                      ) : null}
+                      {selectedComplaint.availableActions?.includes("forward") ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          disabled={actionSaving}
+                          onClick={() => onAction("forward")}
+                        >
+                          {actionSaving ? "Saving..." : "Forward"}
+                        </button>
+                      ) : null}
+                      {selectedComplaint.availableActions?.includes("complete") ? (
+                        <button
+                          type="button"
+                          className="btn btn-success"
+                          disabled={actionSaving}
+                          onClick={() => onAction("complete")}
+                        >
+                          {actionSaving ? "Saving..." : "Mark Completed"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-muted">
-                  This complaint is visible to you, but no action is pending at your level.
-                </div>
-              )}
+                ) : (
+                  <div className="complaint-action-note">
+                    This complaint is visible to you, but no action is pending at your level.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>
