@@ -1,5 +1,6 @@
 export const COMPLAINT_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const COMPLAINT_DUE_SOON_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+export const COMPLAINT_PROCESS_OVERDUE_MS = 22 * 60 * 60 * 1000;
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",
@@ -98,5 +99,67 @@ export const getComplaintTimeState = (complaint, now = new Date()) => {
     isDueSoon,
     statusLabel,
     tone,
+  };
+};
+
+export const getComplaintProcessState = (complaint, now = new Date()) => {
+  const nowDate = toComplaintDate(now) || new Date();
+  const raisedAt = toComplaintDate(complaint?.raisedAt || complaint?.createdAt) || nowDate;
+  const completedAt = toComplaintDate(complaint?.completedAt);
+  const completed =
+    normalizeText(complaint?.status) === "completed" ||
+    normalizeText(complaint?.currentLevel) === "completed" ||
+    Boolean(completedAt);
+  const processDeadlineAt = new Date(raisedAt.getTime() + COMPLAINT_PROCESS_OVERDUE_MS);
+  const referenceEndAt = completed && completedAt ? completedAt : nowDate;
+  const elapsedMs = Math.max(0, referenceEndAt.getTime() - raisedAt.getTime());
+  const remainingMs = Math.max(0, processDeadlineAt.getTime() - nowDate.getTime());
+  const isOverdue = !completed && (Boolean(complaint?.isOverdue) || nowDate >= processDeadlineAt);
+  const isOnProcess = !completed && !isOverdue;
+  const finalStepLabel = isOverdue ? "Overdue" : "Completed";
+  const progressPercent = completed || isOverdue ? 100 : elapsedMs > 0 ? 55 : 12;
+  const tone = completed ? "success" : isOverdue ? "danger" : "info";
+  const statusLabel = completed
+    ? "Completed"
+    : isOverdue
+    ? "Overdue"
+    : "On Process";
+  const helperLabel = completed
+    ? `Completed in ${formatComplaintDuration(elapsedMs)}`
+    : isOverdue
+    ? `Overdue after ${formatComplaintDuration(COMPLAINT_PROCESS_OVERDUE_MS)}`
+    : `Overdue if not completed in ${formatComplaintDuration(remainingMs)}`;
+
+  return {
+    raisedAt,
+    processDeadlineAt,
+    completedAt,
+    completed,
+    elapsedMs,
+    remainingMs,
+    isOverdue,
+    isOnProcess,
+    finalStepLabel,
+    progressPercent,
+    tone,
+    statusLabel,
+    helperLabel,
+    steps: [
+      {
+        key: "submitted",
+        label: "Complaint Submitted",
+        state: "done",
+      },
+      {
+        key: "process",
+        label: "On Process",
+        state: completed || isOverdue ? "done" : "active",
+      },
+      {
+        key: completed ? "completed" : isOverdue ? "overdue" : "final",
+        label: finalStepLabel,
+        state: completed || isOverdue ? "done" : "pending",
+      },
+    ],
   };
 };
