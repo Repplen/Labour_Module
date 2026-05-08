@@ -13,7 +13,6 @@ const {
   buildDepartmentScopeFilter,
   buildEmployeeScopeFilter,
   buildSiteScopeFilter,
-  filterRowsByAccessibleEmployees,
   isAllScope,
   resolveAccessibleEmployeeIds,
   uniqueIdList,
@@ -62,6 +61,12 @@ const canReviewChecklistRequests = (user) =>
   canApproveChecklistRequests(user) || canRejectChecklistRequests(user);
 const canBypassChecklistAdminApproval = (user) =>
   isAdminRequester(user) && isMainAdminReviewer(user);
+const canReadChecklistTaskReport = (user) =>
+  hasModulePermission(user?.permissions, "reports", "view") ||
+  hasModulePermission(user?.permissions, "reports", "report_view");
+const canExportChecklistTaskReport = (user) =>
+  canReadChecklistTaskReport(user) &&
+  hasModulePermission(user?.permissions, "reports", "export");
 
 const mergeQueryFilters = (...filters) => {
   const activeFilters = filters.filter(
@@ -2312,6 +2317,65 @@ const mapChecklistSetupEmployee = (employeeDoc) => {
   };
 };
 
+const extractFilterIds = (filter = {}) =>
+  filter?._id?.$in ? normalizeIdList(filter._id.$in) : [];
+
+const loadChecklistTaskReportOptions = async (access = {}) => {
+  const employeeFilter = await buildEmployeeScopeFilter(access || {});
+  const employees = await Employee.find({
+    ...employeeFilter,
+    isActive: true,
+  })
+    .populate("department", "name subDepartments headNames")
+    .populate("superiorEmployee", "employeeCode employeeName")
+    .populate("sites", "name companyName subSites")
+    .sort({ employeeCode: 1, employeeName: 1 });
+
+  if (isAllScope(access || {})) {
+    const [departments, sites] = await Promise.all([
+      Department.find({ isActive: { $ne: false } }).sort({ name: 1 }),
+      Site.find({ isActive: { $ne: false } }).sort({ companyName: 1, name: 1 }),
+    ]);
+
+    return { employees, departments, sites };
+  }
+
+  const [departmentScopeFilter, siteScopeFilter] = await Promise.all([
+    buildDepartmentScopeFilter(access || {}),
+    buildSiteScopeFilter(access || {}),
+  ]);
+  const employeeDepartmentIds = normalizeIdList(
+    employees.flatMap((employee) => employee?.department || [])
+  );
+  const employeeSiteIds = normalizeIdList(
+    employees.flatMap((employee) => employee?.sites || [])
+  );
+  const departmentIds = normalizeIdList([
+    ...employeeDepartmentIds,
+    ...extractFilterIds(departmentScopeFilter),
+  ]);
+  const siteIds = normalizeIdList([
+    ...employeeSiteIds,
+    ...extractFilterIds(siteScopeFilter),
+  ]);
+  const [departments, sites] = await Promise.all([
+    departmentIds.length
+      ? Department.find({
+          _id: { $in: departmentIds },
+          isActive: { $ne: false },
+        }).sort({ name: 1 })
+      : Promise.resolve([]),
+    siteIds.length
+      ? Site.find({
+          _id: { $in: siteIds },
+          isActive: { $ne: false },
+        }).sort({ companyName: 1, name: 1 })
+      : Promise.resolve([]),
+  ]);
+
+  return { employees, departments, sites };
+};
+
 const getTaskFilters = (query = {}) => {
   const search = normalizeText(query.search);
   const status = normalizeText(query.status).toLowerCase();
@@ -2789,6 +2853,7 @@ const buildChecklistTaskReportFilterSummary = (query = {}) => {
   const status = normalizeText(query.status);
   const scheduleType = normalizeText(query.scheduleType);
   const companyName = normalizeText(query.companyName);
+  const siteId = normalizeText(query.siteId || query.site);
   const department = normalizeText(query.department);
   const subDepartment = normalizeText(query.subDepartment);
   const assignedEmployee = normalizeText(query.assignedEmployee);
@@ -2802,6 +2867,7 @@ const buildChecklistTaskReportFilterSummary = (query = {}) => {
   if (status) parts.push(`Status: ${formatChecklistTaskStatusLabel(status)}`);
   if (scheduleType) parts.push(`Schedule: ${capitalizeLabel(scheduleType)}`);
   if (companyName) parts.push(`Company: ${companyName}`);
+  if (siteId) parts.push("Site Filter Applied");
   if (department) parts.push(`Department Filter Applied`);
   if (subDepartment) parts.push(`Sub Department Filter Applied`);
   if (assignedEmployee) parts.push(`Employee Filter Applied`);
@@ -2817,6 +2883,7 @@ const buildChecklistTaskReportFilter = async (query = {}) => {
   const assignedEmployee = normalizeText(query.assignedEmployee);
   const approverEmployee = normalizeText(query.approverEmployee);
   const companyName = normalizeText(query.companyName);
+  const siteId = normalizeText(query.siteId || query.site);
   const department = normalizeText(query.department);
   const subDepartment = normalizeText(query.subDepartment);
   const fromDateRaw = normalizeText(query.fromDate);
@@ -2847,8 +2914,20 @@ const buildChecklistTaskReportFilter = async (query = {}) => {
     if (toDate) filter.occurrenceDate.$lte = toDate;
   }
 
-  if (companyName) {
-    const matchingSites = await Site.find({ companyName }, "_id").lean();
+  if (companyName || siteId) {
+    if (siteId && !isValidObjectId(siteId)) {
+      return { filter: null };
+    }
+
+    const siteFilter = {};
+    if (companyName) {
+      siteFilter.companyName = companyName;
+    }
+    if (siteId) {
+      siteFilter._id = siteId;
+    }
+
+    const matchingSites = await Site.find(siteFilter, "_id").lean();
 
     if (!matchingSites.length) {
       return { filter: null };
@@ -2901,7 +2980,35 @@ const buildChecklistTaskReportFilter = async (query = {}) => {
   return { filter };
 };
 
-const loadChecklistTaskReportRows = async (query = {}) => {
+const buildChecklistTaskReportScopeFilter = async (access = {}) => {
+  if (isAllScope(access || {})) {
+    return {};
+  }
+
+  const employeeIds = await resolveAccessibleEmployeeIds(access || {});
+
+  return employeeIds.length
+    ? { assignedEmployee: { $in: employeeIds } }
+    : { _id: null };
+};
+
+const isChecklistTaskInReportScope = async (task = {}, access = {}) => {
+  if (isAllScope(access || {})) {
+    return true;
+  }
+
+  const assignedEmployeeId = normalizeText(
+    task?.assignedEmployee?._id || task?.assignedEmployee
+  );
+  if (!assignedEmployeeId) {
+    return false;
+  }
+
+  const employeeIds = await resolveAccessibleEmployeeIds(access || {});
+  return employeeIds.map(String).includes(assignedEmployeeId);
+};
+
+const loadChecklistTaskReportRows = async (query = {}, access = {}) => {
   const filterResult = await buildChecklistTaskReportFilter(query);
 
   if (filterResult?.error) {
@@ -2912,7 +3019,14 @@ const loadChecklistTaskReportRows = async (query = {}) => {
     return { tasks: [] };
   }
 
-  const tasks = await ChecklistTask.find(filterResult.filter)
+  const scopeFilter = await buildChecklistTaskReportScopeFilter(access);
+  if (scopeFilter?._id === null) {
+    return { tasks: [] };
+  }
+
+  const tasks = await ChecklistTask.find(
+    mergeQueryFilters(filterResult.filter, scopeFilter)
+  )
     .populate(checklistTaskPopulateQuery)
     .sort({ occurrenceDate: -1, createdAt: -1 });
 
@@ -4898,7 +5012,12 @@ exports.getChecklistTaskById = async (req, res) => {
       return res.status(404).json({ message: "Checklist task not found" });
     }
 
-    if (!canAccessChecklistTask(task, req.user)) {
+    const canOpenFromAssignedOrApproval = canAccessChecklistTask(task, req.user);
+    const canOpenFromReport =
+      canReadChecklistTaskReport(req.user) &&
+      (await isChecklistTaskInReportScope(task, req.access || {}));
+
+    if (!canOpenFromAssignedOrApproval && !canOpenFromReport) {
       return res.status(404).json({ message: "Checklist task not found" });
     }
 
@@ -5037,13 +5156,37 @@ exports.decideChecklistTask = async (req, res) => {
   }
 };
 
-exports.getChecklistTaskReport = async (req, res) => {
+exports.getChecklistTaskReportOptions = async (req, res) => {
   try {
-    if (!isAdminRequester(req.user) && !req.user?.permissions?.reports?.canReportView) {
+    if (!canReadChecklistTaskReport(req.user)) {
       return res.status(403).json({ message: "Report view permission is required" });
     }
 
-    const reportResult = await loadChecklistTaskReportRows(req.query);
+    const { employees, departments, sites } = await loadChecklistTaskReportOptions(
+      req.access || {}
+    );
+
+    return res.json({
+      employees: employees.map(mapChecklistSetupEmployee),
+      departments,
+      sites,
+      currentPrincipalEmployeeId:
+        req.user?.principalType === "employee" ? normalizeText(req.user?.id) : "",
+      scopeStrategy: normalizeText(req.access?.scope?.strategy).toLowerCase(),
+    });
+  } catch (err) {
+    console.error("GET CHECKLIST TASK REPORT OPTIONS ERROR:", err);
+    return res.status(500).json({ message: "Failed to load checklist task report filters" });
+  }
+};
+
+exports.getChecklistTaskReport = async (req, res) => {
+  try {
+    if (!canReadChecklistTaskReport(req.user)) {
+      return res.status(403).json({ message: "Report view permission is required" });
+    }
+
+    const reportResult = await loadChecklistTaskReportRows(req.query, req.access || {});
 
     if (reportResult?.error) {
       return res
@@ -5051,15 +5194,7 @@ exports.getChecklistTaskReport = async (req, res) => {
         .json({ message: reportResult.error });
     }
 
-    const tasks = isAllScope(req.access || {})
-      ? reportResult.tasks || []
-      : await filterRowsByAccessibleEmployees(
-          reportResult.tasks || [],
-          req.access || {},
-          (task) => task?.assignedEmployee?._id || task?.assignedEmployee
-        );
-
-    return res.json(tasks);
+    return res.json(reportResult.tasks || []);
   } catch (err) {
     console.error("GET CHECKLIST TASK REPORT ERROR:", err);
     return res.status(500).json({ message: "Failed to load checklist task report" });
@@ -5068,11 +5203,11 @@ exports.getChecklistTaskReport = async (req, res) => {
 
 exports.exportChecklistTaskReportExcel = async (req, res) => {
   try {
-    if (!isAdminRequester(req.user) && !req.user?.permissions?.reports?.canExport) {
+    if (!canExportChecklistTaskReport(req.user)) {
       return res.status(403).json({ message: "Report export permission is required" });
     }
 
-    const reportResult = await loadChecklistTaskReportRows(req.query);
+    const reportResult = await loadChecklistTaskReportRows(req.query, req.access || {});
 
     if (reportResult?.error) {
       return res
@@ -5092,15 +5227,7 @@ exports.exportChecklistTaskReportExcel = async (req, res) => {
       to: { row: 1, column: checklistTaskReportExcelColumns.length },
     };
 
-    const scopedTasks = isAllScope(req.access || {})
-      ? reportResult.tasks || []
-      : await filterRowsByAccessibleEmployees(
-          reportResult.tasks || [],
-          req.access || {},
-          (task) => task?.assignedEmployee?._id || task?.assignedEmployee
-        );
-
-    scopedTasks.forEach((task, index) => {
+    (reportResult.tasks || []).forEach((task, index) => {
       worksheet.addRow(buildChecklistTaskReportRow(task, index));
     });
 
@@ -5125,11 +5252,11 @@ exports.exportChecklistTaskReportExcel = async (req, res) => {
 
 exports.exportChecklistTaskReportPdf = async (req, res) => {
   try {
-    if (!isAdminRequester(req.user) && !req.user?.permissions?.reports?.canExport) {
+    if (!canExportChecklistTaskReport(req.user)) {
       return res.status(403).json({ message: "Report export permission is required" });
     }
 
-    const reportResult = await loadChecklistTaskReportRows(req.query);
+    const reportResult = await loadChecklistTaskReportRows(req.query, req.access || {});
 
     if (reportResult?.error) {
       return res
@@ -5137,15 +5264,7 @@ exports.exportChecklistTaskReportPdf = async (req, res) => {
         .json({ message: reportResult.error });
     }
 
-    const scopedTasks = isAllScope(req.access || {})
-      ? reportResult.tasks || []
-      : await filterRowsByAccessibleEmployees(
-          reportResult.tasks || [],
-          req.access || {},
-          (task) => task?.assignedEmployee?._id || task?.assignedEmployee
-        );
-
-    const reportRows = scopedTasks.map((task, index) =>
+    const reportRows = (reportResult.tasks || []).map((task, index) =>
       buildChecklistTaskReportRow(task, index)
     );
     const pdfBuffer = buildSimplePdfBuffer(

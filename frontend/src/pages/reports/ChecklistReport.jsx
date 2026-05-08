@@ -52,17 +52,18 @@ const buildSubDepartmentOptions = (departmentRows = [], selectedDepartmentId = "
       flattenSubDepartments(department.subDepartments || [], [], department)
     );
 
-const defaultFilters = {
+const buildDefaultFilters = (assignedEmployee = "") => ({
   fromDate: "",
   toDate: "",
   status: "",
   scheduleType: "",
   companyName: "",
+  siteId: "",
   department: "",
   subDepartment: "",
-  assignedEmployee: "",
+  assignedEmployee,
   timelinessStatus: "",
-};
+});
 
 const getDepartmentLabel = (value) =>
   formatDepartmentList(value?.assignedEmployee?.department || value?.departmentDetails || value?.department) ||
@@ -96,30 +97,56 @@ const getDownloadFileName = (headers = {}, fallbackFileName) => {
 };
 
 export default function ChecklistReport() {
-  const { can } = usePermissions();
-  const canExportReports = can("reports", "export");
+  const { can, canAny, scope } = usePermissions();
+  const canReadReports = canAny([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]);
+  const canExportReports = canReadReports && can("reports", "export");
   const [rows, setRows] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState(defaultFilters);
-  const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
+  const [filters, setFilters] = useState(() => buildDefaultFilters());
+  const [appliedFilters, setAppliedFilters] = useState(() => buildDefaultFilters());
   const [loading, setLoading] = useState(false);
   const [exportingFormat, setExportingFormat] = useState("");
+  const [reportScopeStrategy, setReportScopeStrategy] = useState(
+    String(scope?.strategy || "").trim().toLowerCase()
+  );
+  const [ownEmployeeId, setOwnEmployeeId] = useState("");
+  const isOwnDataScope = reportScopeStrategy === "own";
 
   useEffect(() => {
     const loadMasters = async () => {
       try {
-        const [employeeResponse, departmentResponse, siteResponse] = await Promise.all([
-          api.get("/employees", { params: { status: "active" } }),
-          api.get("/departments"),
-          api.get("/sites"),
-        ]);
+        const response = await api.get("/checklists/tasks/report/options");
+        const nextEmployees = Array.isArray(response.data?.employees)
+          ? response.data.employees
+          : [];
+        const nextDepartments = Array.isArray(response.data?.departments)
+          ? response.data.departments
+          : [];
+        const nextSites = Array.isArray(response.data?.sites) ? response.data.sites : [];
+        const nextScopeStrategy = String(
+          response.data?.scopeStrategy || scope?.strategy || ""
+        )
+          .trim()
+          .toLowerCase();
+        const nextOwnEmployeeId = String(response.data?.currentPrincipalEmployeeId || "");
 
-        setEmployees(Array.isArray(employeeResponse.data) ? employeeResponse.data : []);
-        setDepartments(Array.isArray(departmentResponse.data) ? departmentResponse.data : []);
-        setSites(Array.isArray(siteResponse.data) ? siteResponse.data : []);
+        setEmployees(nextEmployees);
+        setDepartments(nextDepartments);
+        setSites(nextSites);
+        setReportScopeStrategy(nextScopeStrategy);
+        setOwnEmployeeId(nextOwnEmployeeId);
+
+        if (nextScopeStrategy === "own" && nextOwnEmployeeId) {
+          const ownFilters = buildDefaultFilters(nextOwnEmployeeId);
+          setFilters(ownFilters);
+          setAppliedFilters(ownFilters);
+        }
       } catch (err) {
         console.error("Checklist report master load failed:", err);
         setEmployees([]);
@@ -129,7 +156,7 @@ export default function ChecklistReport() {
     };
 
     void loadMasters();
-  }, []);
+  }, [scope?.strategy]);
 
   useEffect(() => {
     const loadReport = async () => {
@@ -144,6 +171,7 @@ export default function ChecklistReport() {
             status: appliedFilters.status || undefined,
             scheduleType: appliedFilters.scheduleType || undefined,
             companyName: appliedFilters.companyName || undefined,
+            siteId: appliedFilters.siteId || undefined,
             department: appliedFilters.department || undefined,
             subDepartment: appliedFilters.subDepartment || undefined,
             assignedEmployee: appliedFilters.assignedEmployee || undefined,
@@ -169,12 +197,20 @@ export default function ChecklistReport() {
       return;
     }
 
-    setAppliedFilters({ ...filters });
+    const nextFilters =
+      isOwnDataScope && ownEmployeeId
+        ? { ...filters, assignedEmployee: ownEmployeeId }
+        : { ...filters };
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters);
   };
 
   const clearFilters = () => {
-    setFilters(defaultFilters);
-    setAppliedFilters(defaultFilters);
+    const resetFilters = buildDefaultFilters(
+      isOwnDataScope && ownEmployeeId ? ownEmployeeId : ""
+    );
+    setFilters(resetFilters);
+    setAppliedFilters(resetFilters);
   };
 
   const subDepartmentOptions = buildSubDepartmentOptions(departments, filters.department);
@@ -189,13 +225,38 @@ export default function ChecklistReport() {
       ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" })),
     [sites]
   );
+  const filteredSites = useMemo(() => {
+    if (!filters.companyName) return sites;
+    return sites.filter((site) => String(site?.companyName || "") === filters.companyName);
+  }, [filters.companyName, sites]);
+  const ownEmployeeOption = employees.find(
+    (employee) => String(employee?._id || "") === String(ownEmployeeId || "")
+  );
   const filteredEmployees = employees.filter((employee) => {
+    const siteIds = Array.isArray(employee.sites)
+      ? employee.sites.map((site) => String(site?._id || site))
+      : [];
+    const companyNames = Array.from(
+      new Set(
+        (Array.isArray(employee.sites) ? employee.sites : [])
+          .map((site) => String(site?.companyName || "").trim())
+          .filter(Boolean)
+      )
+    );
     const departmentIds = Array.isArray(employee.departmentIds)
       ? employee.departmentIds.map((item) => String(item))
       : [];
     const subDepartmentIds = Array.isArray(employee.subDepartment)
       ? employee.subDepartment.map((item) => String(item))
       : [];
+
+    if (filters.companyName && !companyNames.includes(String(filters.companyName))) {
+      return false;
+    }
+
+    if (filters.siteId && !siteIds.includes(String(filters.siteId))) {
+      return false;
+    }
 
     if (filters.department && !departmentIds.includes(String(filters.department))) {
       return false;
@@ -220,6 +281,7 @@ export default function ChecklistReport() {
           status: appliedFilters.status || undefined,
           scheduleType: appliedFilters.scheduleType || undefined,
           companyName: appliedFilters.companyName || undefined,
+          siteId: appliedFilters.siteId || undefined,
           department: appliedFilters.department || undefined,
           subDepartment: appliedFilters.subDepartment || undefined,
           assignedEmployee: appliedFilters.assignedEmployee || undefined,
@@ -364,13 +426,39 @@ export default function ChecklistReport() {
                 className="form-select"
                 value={filters.companyName}
                 onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, companyName: event.target.value }))
+                  setFilters((prev) => ({
+                    ...prev,
+                    companyName: event.target.value,
+                    siteId: "",
+                    assignedEmployee: isOwnDataScope ? prev.assignedEmployee : "",
+                  }))
                 }
               >
                 <option value="">All Companies</option>
                 {companyOptions.map((companyName) => (
                   <option key={companyName} value={companyName}>
                     {companyName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-12 col-md-6 col-xl-2">
+              <label className="form-label mb-1">Site</label>
+              <select
+                className="form-select"
+                value={filters.siteId}
+                onChange={(event) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    siteId: event.target.value,
+                    assignedEmployee: isOwnDataScope ? prev.assignedEmployee : "",
+                  }))
+                }
+              >
+                <option value="">All Sites</option>
+                {filteredSites.map((site) => (
+                  <option key={site._id} value={site._id}>
+                    {[site.companyName, site.name].filter(Boolean).join(" - ") || site.name}
                   </option>
                 ))}
               </select>
@@ -385,7 +473,7 @@ export default function ChecklistReport() {
                     ...prev,
                     department: event.target.value,
                     subDepartment: "",
-                    assignedEmployee: "",
+                    assignedEmployee: isOwnDataScope ? prev.assignedEmployee : "",
                   }))
                 }
               >
@@ -406,7 +494,7 @@ export default function ChecklistReport() {
                   setFilters((prev) => ({
                     ...prev,
                     subDepartment: event.target.value,
-                    assignedEmployee: "",
+                    assignedEmployee: isOwnDataScope ? prev.assignedEmployee : "",
                   }))
                 }
                 disabled={!filters.department || !subDepartmentOptions.length}
@@ -421,20 +509,30 @@ export default function ChecklistReport() {
             </div>
             <div className="col-12 col-md-6 col-xl-5">
               <label className="form-label mb-1">Employee</label>
-              <select
-                className="form-select"
-                value={filters.assignedEmployee}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, assignedEmployee: event.target.value }))
-                }
-              >
-                <option value="">All Employees</option>
-                {filteredEmployees.map((employee) => (
-                  <option key={employee._id} value={employee._id}>
-                    {formatEmployeeOptionLabel(employee)}
+              {isOwnDataScope ? (
+                <select className="form-select" value={ownEmployeeId} disabled>
+                  <option value={ownEmployeeId}>
+                    {ownEmployeeOption
+                      ? formatEmployeeOptionLabel(ownEmployeeOption)
+                      : "Logged-in employee"}
                   </option>
-                ))}
-              </select>
+                </select>
+              ) : (
+                <select
+                  className="form-select"
+                  value={filters.assignedEmployee}
+                  onChange={(event) =>
+                    setFilters((prev) => ({ ...prev, assignedEmployee: event.target.value }))
+                  }
+                >
+                  <option value="">All Employees</option>
+                  {filteredEmployees.map((employee) => (
+                    <option key={employee._id} value={employee._id}>
+                      {formatEmployeeOptionLabel(employee)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="col-12 col-md-4 col-xl-2">
               <label className="form-label mb-1">Time</label>

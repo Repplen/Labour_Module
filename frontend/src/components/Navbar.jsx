@@ -271,7 +271,10 @@ export default function Navbar() {
         can("dashboard_analytics", "view")
           ? { to: "/dashboard-summary", label: "Summary" }
           : null,
-        can("reports", "report_view")
+        canAny([
+          { moduleKey: "reports", actionKey: "view" },
+          { moduleKey: "reports", actionKey: "report_view" },
+        ])
           ? { to: "/reports/checklists", label: "Checklist Report" }
           : null,
         can("poll_master", "report_view")
@@ -281,7 +284,7 @@ export default function Navbar() {
           ? { to: "/complaints/reports", label: "Complaint Report" }
           : null,
       ].filter(Boolean),
-    [can]
+    [can, canAny]
   );
 
   const adminLinks = useMemo(

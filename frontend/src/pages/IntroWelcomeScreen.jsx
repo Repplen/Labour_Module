@@ -115,13 +115,20 @@ const getAttendanceModulePath = (can, canAny) => {
   return "";
 };
 
-const getChecklistModulePath = (can) => {
+const getChecklistModulePath = (can, canAny) => {
   if (can("checklist_master", "view") || can("assigned_checklists", "view")) return "/checklists";
   if (can("approval_inbox", "view")) return "/checklists/approvals";
   if (can("checklist_master", "approve") || can("checklist_master", "reject")) {
     return "/checklists/admin-approvals";
   }
-  if (can("reports", "report_view")) return "/reports/checklists";
+  if (
+    canAny([
+      { moduleKey: "reports", actionKey: "view" },
+      { moduleKey: "reports", actionKey: "report_view" },
+    ])
+  ) {
+    return "/reports/checklists";
+  }
   if (can("checklist_transfer", "view")) return "/masters/checklist-transfer";
   return "";
 };
@@ -768,7 +775,7 @@ export default function IntroWelcomeScreen() {
     [checklistSummary.userName, departmentPendingCount, personalPendingCount, sessionSeed]
   );
   const attendanceTargetPath = getAttendanceModulePath(can, canAny);
-  const checklistTargetPath = getChecklistModulePath(can);
+  const checklistTargetPath = getChecklistModulePath(can, canAny);
   const pollingTargetPath = getPollingModulePath(can);
   const complaintTargetPath = getComplaintModulePath(can);
   const showPollingButton = Boolean(

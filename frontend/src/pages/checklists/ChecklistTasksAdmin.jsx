@@ -57,9 +57,12 @@ const isGeneratedTaskRouteUnavailable = (err) => {
 };
 
 export default function ChecklistTasksAdmin() {
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
   const canDeleteTasks = can("checklist_master", "delete");
-  const canViewTaskReport = can("reports", "report_view");
+  const canViewTaskReport = canAny([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]);
   const canViewApprovalInbox = can("approval_inbox", "view");
 
   const [rows, setRows] = useState([]);

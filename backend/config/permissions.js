@@ -500,6 +500,7 @@ const SYSTEM_ROLES = [
       employee_attendance: grant("view", "add", "edit"),
       attendance_regularization: grant("view", "add"),
       own_task: grant("view", "add", "edit"),
+      reports: grant("view", "report_view"),
       notifications: grant("view"),
       own_profile: grant("view"),
     },

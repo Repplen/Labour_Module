@@ -1,6 +1,7 @@
 const {
   idParamSchema,
   objectIdField,
+  optionalObjectIdField,
   optionalTrimmedString,
   requiredTrimmedString,
   z,
@@ -14,7 +15,7 @@ const employeeCreateSchema = z
     department: z.any(),
     subDepartment: z.any().optional(),
     sites: z.any(),
-    superiorEmployee: objectIdField("Superior employee").optional(),
+    superiorEmployee: optionalObjectIdField("Superior employee"),
     dateOfJoining: optionalTrimmedString,
     email: optionalTrimmedString.refine(
       (value) => value === undefined || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
@@ -36,7 +37,7 @@ const employeeUpdateSchema = z
     department: z.any(),
     subDepartment: z.any().optional(),
     sites: z.any(),
-    superiorEmployee: objectIdField("Superior employee").optional(),
+    superiorEmployee: optionalObjectIdField("Superior employee"),
     dateOfJoining: optionalTrimmedString,
     email: optionalTrimmedString.refine(
       (value) => value === undefined || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),

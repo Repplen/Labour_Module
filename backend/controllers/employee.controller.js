@@ -3,6 +3,7 @@ const Department = require("../models/Department");
 const Site = require("../models/Site");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { Types } = require("mongoose");
 const {
   buildEmployeeScopeFilter,
@@ -12,6 +13,14 @@ const {
 
 const normalizeSites = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
+const qrFieldKeys = ["qrToken", "qrCodeUrl", "qrGeneratedAt", "qrEnabled"];
+const stripQrFields = (value = {}) => {
+  const nextValue = { ...value };
+  qrFieldKeys.forEach((fieldKey) => {
+    delete nextValue[fieldKey];
+  });
+  return nextValue;
+};
 
 const normalizeIdList = (value) => {
   const rawValues = Array.isArray(value) ? value : value ? [value] : [];
@@ -134,6 +143,49 @@ const formatSiteDisplayName = (site) => {
   const name = String(site.name || "").trim();
   if (companyName && name) return `${companyName} - ${name}`;
   return name || companyName;
+};
+
+const normalizePublicBaseUrl = (value) => {
+  const normalizedValue = String(value || "").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(normalizedValue)) return "";
+  return normalizedValue.replace(/\/api$/i, "");
+};
+
+const getRequestPublicBaseUrl = (req) =>
+  normalizePublicBaseUrl(
+    req.body?.publicBaseUrl ||
+      req.body?.baseUrl ||
+      process.env.PUBLIC_APP_URL ||
+      process.env.APP_BASE_URL ||
+      process.env.FRONTEND_URL ||
+      req.headers.origin ||
+      `${req.protocol}://${req.get("host")}`
+  );
+
+const buildQrCodeUrl = (req, qrToken) => {
+  const publicBaseUrl = getRequestPublicBaseUrl(req);
+  return `${publicBaseUrl || ""}/employee-qr/${encodeURIComponent(qrToken)}`;
+};
+
+const generateQrTokenValue = () =>
+  crypto
+    .randomBytes(24)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+const createUniqueEmployeeQrToken = async () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const token = generateQrTokenValue();
+    // eslint-disable-next-line no-await-in-loop
+    const existingEmployee = await Employee.exists({ qrToken: token });
+    if (!existingEmployee) return token;
+  }
+
+  const error = new Error("Failed to generate a unique employee QR token");
+  error.status = 500;
+  throw error;
 };
 
 const parseSubSitesPayload = (rawValue) => {
@@ -312,6 +364,9 @@ const mapSubSitesForEmployee = (employee) => {
 
 const mapEmployee = (employeeDoc) => {
   const employee = employeeDoc.toObject ? employeeDoc.toObject() : employeeDoc;
+  const safeEmployee = { ...employee };
+  delete safeEmployee.password;
+  delete safeEmployee.qrToken;
   const departmentDetails = buildDepartmentDetails(employee.department);
   const departmentNames = departmentDetails.map((row) => row.name).filter(Boolean);
   const subSiteDetails = mapSubSitesForEmployee(employee);
@@ -324,7 +379,7 @@ const mapEmployee = (employeeDoc) => {
   const subDepartmentPaths = subDepartmentDetails.map((row) => row.path).filter(Boolean);
 
   return {
-    ...employee,
+    ...safeEmployee,
     departmentIds: normalizeIdList(employee.department),
     departmentDetails,
     departmentName: departmentNames.join(", "),
@@ -341,6 +396,93 @@ const mapEmployee = (employeeDoc) => {
     subSitePaths,
     subSiteDisplay: subSitePaths.join(", "),
   };
+};
+
+const getEmployeePhotoUrl = (req, employee = {}) => {
+  const photo = String(employee?.photo || "").trim();
+  if (!photo) return "";
+
+  const publicBaseUrl = normalizePublicBaseUrl(
+    process.env.PUBLIC_API_URL ||
+      process.env.API_BASE_URL ||
+      `${req.protocol}://${req.get("host")}`
+  );
+
+  return `${publicBaseUrl}/uploads/${encodeURIComponent(photo)}`;
+};
+
+const buildSafeEmployeeQrProfile = (req, employeeDoc) => {
+  const employee = mapEmployee(employeeDoc);
+  const siteRows = Array.isArray(employee.sites) ? employee.sites : [];
+  const companyNames = [
+    ...new Set(
+      siteRows
+        .map((site) => String(site?.companyName || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+
+  return {
+    employeeCode: employee.employeeCode || "",
+    employeeName: employee.employeeName || "",
+    photoUrl: getEmployeePhotoUrl(req, employee),
+    designation: employee.designation?.name || "",
+    department: employee.departmentDisplay || employee.departmentName || "",
+    subDepartment:
+      employee.subDepartmentDisplay ||
+      employee.subDepartmentPath ||
+      employee.subDepartmentName ||
+      "",
+    site: siteRows.map(formatSiteDisplayName).filter(Boolean).join(", "),
+    company: companyNames.join(", "),
+    isActive: employee.isActive !== false,
+    status: employee.isActive === false ? "Inactive" : "Active",
+    lastUpdatedAt: employee.updatedAt || employee.createdAt || null,
+  };
+};
+
+const findScopedEmployeeById = async (req, employeeId) => {
+  if (!isAllScope(req.access || {})) {
+    const accessibleEmployeeIds = await resolveAccessibleEmployeeIds(req.access || {});
+    if (!accessibleEmployeeIds.includes(String(employeeId || ""))) {
+      return null;
+    }
+  }
+
+  return Employee.findById(employeeId)
+    .populate("department", "name subDepartments")
+    .populate("designation", "name")
+    .populate("superiorEmployee", "employeeCode employeeName")
+    .populate("sites", "name companyName subSites");
+};
+
+const buildEmployeeQrPayload = (employee = {}) => ({
+  employeeId: employee._id,
+  employeeCode: employee.employeeCode || "",
+  employeeName: employee.employeeName || "",
+  qrCodeUrl: employee.qrCodeUrl || "",
+  qrGeneratedAt: employee.qrGeneratedAt || null,
+  qrEnabled: employee.qrEnabled !== false,
+});
+
+const ensureEmployeeQrFields = async (req, employee, { regenerate = false } = {}) => {
+  const nextToken = regenerate || !employee.qrToken
+    ? await createUniqueEmployeeQrToken()
+    : employee.qrToken;
+  const qrCodeUrl = buildQrCodeUrl(req, nextToken);
+
+  employee.qrToken = nextToken;
+  employee.qrCodeUrl = qrCodeUrl;
+  employee.qrGeneratedAt = regenerate || !employee.qrGeneratedAt
+    ? new Date()
+    : employee.qrGeneratedAt;
+
+  if (typeof employee.qrEnabled !== "boolean") {
+    employee.qrEnabled = true;
+  }
+
+  await employee.save();
+  return employee;
 };
 
 exports.getEmployees = async (req, res) => {
@@ -406,6 +548,7 @@ exports.getEmployeeById = async (req, res) => {
 
 exports.createEmployee = async (req, res) => {
   try {
+    const safeBody = stripQrFields(req.body);
     const rawPassword = String(req.body.password || "").trim();
 
     if (!rawPassword) {
@@ -427,7 +570,7 @@ exports.createEmployee = async (req, res) => {
     const subSites = await validateSubSites(sites, req.body.subSites);
 
     const employee = new Employee({
-      ...req.body,
+      ...safeBody,
       password: await bcrypt.hash(rawPassword, 10),
       department: departmentSelection.department,
       subDepartment: departmentSelection.subDepartment,
@@ -437,6 +580,10 @@ exports.createEmployee = async (req, res) => {
       subSites,
       photo: req.file ? req.file.filename : null,
     });
+    employee.qrToken = await createUniqueEmployeeQrToken();
+    employee.qrCodeUrl = buildQrCodeUrl(req, employee.qrToken);
+    employee.qrGeneratedAt = new Date();
+    employee.qrEnabled = true;
 
     await employee.save();
     res.json({ success: true });
@@ -469,7 +616,7 @@ exports.updateEmployee = async (req, res) => {
       : undefined;
 
     const data = {
-      ...req.body,
+      ...stripQrFields(req.body),
       department: departmentSelection.department,
       subDepartment: departmentSelection.subDepartment,
       sites,
@@ -581,6 +728,97 @@ exports.toggleEmployeeStatus = async (req, res) => {
     res.json({ success: true, isActive: emp.isActive });
   } catch (err) {
     res.status(500).json({ message: "Status update failed" });
+  }
+};
+
+exports.getOrCreateEmployeeQr = async (req, res) => {
+  try {
+    const employee = await findScopedEmployeeById(req, req.params.id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    await ensureEmployeeQrFields(req, employee);
+    return res.json(buildEmployeeQrPayload(employee));
+  } catch (err) {
+    console.error("Employee QR generation error:", err);
+    return res
+      .status(err.status || 500)
+      .json({ message: err.message || "Failed to generate employee QR code" });
+  }
+};
+
+exports.regenerateEmployeeQr = async (req, res) => {
+  try {
+    const employee = await findScopedEmployeeById(req, req.params.id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    employee.qrEnabled = true;
+    await ensureEmployeeQrFields(req, employee, { regenerate: true });
+    return res.json(buildEmployeeQrPayload(employee));
+  } catch (err) {
+    console.error("Employee QR regeneration error:", err);
+    return res
+      .status(err.status || 500)
+      .json({ message: err.message || "Failed to regenerate employee QR code" });
+  }
+};
+
+exports.updateEmployeeQrAccess = async (req, res) => {
+  try {
+    const employee = await findScopedEmployeeById(req, req.params.id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    if (!employee.qrToken) {
+      await ensureEmployeeQrFields(req, employee);
+    }
+
+    employee.qrEnabled = Boolean(req.body?.qrEnabled);
+    if (employee.qrToken && !employee.qrCodeUrl) {
+      employee.qrCodeUrl = buildQrCodeUrl(req, employee.qrToken);
+    }
+
+    await employee.save();
+    return res.json(buildEmployeeQrPayload(employee));
+  } catch (err) {
+    console.error("Employee QR access update error:", err);
+    return res
+      .status(err.status || 500)
+      .json({ message: err.message || "Failed to update employee QR access" });
+  }
+};
+
+exports.getEmployeeByQrToken = async (req, res) => {
+  try {
+    const qrToken = String(req.params.qrToken || "").trim();
+    if (!qrToken) {
+      return res.status(404).json({ message: "Employee not found or QR code is invalid." });
+    }
+
+    const employee = await Employee.findOne({ qrToken })
+      .populate("department", "name subDepartments")
+      .populate("designation", "name")
+      .populate("sites", "name companyName subSites");
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found or QR code is invalid." });
+    }
+
+    if (employee.qrEnabled === false) {
+      return res.status(403).json({ message: "QR access is disabled for this employee." });
+    }
+
+    return res.json(buildSafeEmployeeQrProfile(req, employee));
+  } catch (err) {
+    console.error("Employee QR profile error:", err);
+    return res.status(500).json({ message: "Failed to load employee QR profile" });
   }
 };
 

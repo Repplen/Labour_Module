@@ -11,6 +11,7 @@ import Dashboard2Summary from "./pages/Dashboard2Summary";
 import EmployeeForm from "./pages/EmployeeForm";
 import EmployeeEdit from "./pages/EmployeeEdit";
 import EmployeeList from "./pages/EmployeeList";
+import EmployeeQrProfile from "./pages/EmployeeQrProfile";
 import EmployeeView from "./pages/EmployeeView";
 import Login from "./pages/Login";
 import ModulePlaceholderPage from "./pages/ModulePlaceholderPage";
@@ -150,7 +151,9 @@ function AppRoutes() {
   const location = useLocation();
   const { loading } = usePermissions();
   const hideNavbar =
-    location.pathname === "/login" || location.pathname.startsWith("/welcome");
+    location.pathname === "/login" ||
+    location.pathname.startsWith("/welcome") ||
+    location.pathname.startsWith("/employee-qr");
 
   useEffect(() => {
     document.documentElement.removeAttribute("data-theme");
@@ -209,6 +212,8 @@ function AppRoutes() {
               </PrivateRoute>
             }
           />
+
+          <Route path="/employee-qr/:qrToken" element={<EmployeeQrProfile />} />
 
           <Route
             path="/dashboard"
@@ -490,6 +495,7 @@ function AppRoutes() {
                 anyOf={[
                   { moduleKey: "assigned_checklists", actionKey: "view" },
                   { moduleKey: "approval_inbox", actionKey: "view" },
+                  { moduleKey: "reports", actionKey: "view" },
                   { moduleKey: "reports", actionKey: "report_view" },
                   { moduleKey: "checklist_master", actionKey: "view" },
                 ]}
@@ -592,7 +598,12 @@ function AppRoutes() {
           <Route
             path="/reports/checklists"
             element={
-              <PermissionRoute moduleKey="reports" actionKey="report_view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "reports", actionKey: "view" },
+                  { moduleKey: "reports", actionKey: "report_view" },
+                ]}
+              >
                 <ChecklistReport />
               </PermissionRoute>
             }

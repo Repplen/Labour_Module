@@ -20,6 +20,28 @@ router.get(
   requirePermission("employee_master", "export"),
   controller.exportEmployeesExcel
 );
+router.get("/qr/:qrToken", controller.getEmployeeByQrToken);
+router.post(
+  "/:id/qr",
+  auth,
+  requirePermission("employee_master", "view"),
+  validateRequest({ params: idParamSchema }),
+  controller.getOrCreateEmployeeQr
+);
+router.post(
+  "/:id/qr/regenerate",
+  auth,
+  requirePermission("employee_master", "edit"),
+  validateRequest({ params: idParamSchema }),
+  controller.regenerateEmployeeQr
+);
+router.patch(
+  "/:id/qr/access",
+  auth,
+  requirePermission("employee_master", "edit"),
+  validateRequest({ params: idParamSchema }),
+  controller.updateEmployeeQrAccess
+);
 router.get(
   "/:id",
   auth,

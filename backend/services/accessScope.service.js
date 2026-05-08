@@ -23,6 +23,39 @@ const isAllScope = (access) =>
 
 const buildEmptyAccessFilter = () => ({ _id: null });
 
+const resolveManagedEmployeeIds = async (principalId) => {
+  const rootEmployeeId = normalizeId(principalId);
+  if (!rootEmployeeId) {
+    return [];
+  }
+
+  const managedEmployeeIds = [];
+  const visitedEmployeeIds = new Set([rootEmployeeId]);
+  let nextSuperiorIds = [rootEmployeeId];
+
+  while (nextSuperiorIds.length) {
+    const employees = await Employee.find(
+      {
+        superiorEmployee: { $in: nextSuperiorIds },
+        isActive: { $ne: false },
+      },
+      "_id"
+    ).lean();
+    const childEmployeeIds = uniqueIdList(employees.map((employee) => employee._id)).filter(
+      (employeeId) => !visitedEmployeeIds.has(employeeId)
+    );
+
+    childEmployeeIds.forEach((employeeId) => {
+      visitedEmployeeIds.add(employeeId);
+      managedEmployeeIds.push(employeeId);
+    });
+
+    nextSuperiorIds = childEmployeeIds;
+  }
+
+  return managedEmployeeIds;
+};
+
 const resolveAccessibleEmployeeIds = async (access = {}) => {
   if (isAllScope(access)) {
     return [];
@@ -34,6 +67,8 @@ const resolveAccessibleEmployeeIds = async (access = {}) => {
   }
 
   const directEmployeeIds = uniqueIdList(access?.scope?.employeeIds);
+  const managedEmployeeIds =
+    strategy === "managed" ? await resolveManagedEmployeeIds(access?.principalId) : [];
   const siteIds = uniqueIdList(access?.scope?.siteIds);
   const departmentIds = uniqueIdList(access?.scope?.departmentIds);
   const subDepartmentIds = uniqueIdList(access?.scope?.subDepartmentIds);
@@ -44,6 +79,10 @@ const resolveAccessibleEmployeeIds = async (access = {}) => {
 
   if (directEmployeeIds.length) {
     or.push({ _id: { $in: directEmployeeIds } });
+  }
+
+  if (managedEmployeeIds.length) {
+    or.push({ _id: { $in: managedEmployeeIds } });
   }
 
   if (siteIds.length) {
@@ -202,6 +241,7 @@ module.exports = {
   buildSiteScopeFilter,
   filterRowsByAccessibleEmployees,
   isAllScope,
+  resolveManagedEmployeeIds,
   resolveAccessibleEmployeeIds,
   uniqueIdList,
 };

@@ -140,15 +140,17 @@ const resolveScope = ({ principalType, principal, resolvedRole }) => {
   };
 
   if (principalType === "employee") {
-    if (!resolvedScope.siteIds.length) {
+    const shouldInferEmployeeMappings = scopeStrategy !== "managed";
+
+    if (shouldInferEmployeeMappings && !resolvedScope.siteIds.length) {
       resolvedScope.siteIds = uniqueIdList(principal?.sites);
     }
 
-    if (!resolvedScope.departmentIds.length) {
+    if (shouldInferEmployeeMappings && !resolvedScope.departmentIds.length) {
       resolvedScope.departmentIds = uniqueIdList(principal?.department);
     }
 
-    if (!resolvedScope.subDepartmentIds.length) {
+    if (shouldInferEmployeeMappings && !resolvedScope.subDepartmentIds.length) {
       resolvedScope.subDepartmentIds = uniqueIdList(principal?.subDepartment);
     }
 

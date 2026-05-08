@@ -7,6 +7,7 @@ import {
   IMAGE_FILE_OPTIONS,
   validateFile,
 } from "../utils/fileValidation";
+import { formatApiErrorMessage } from "../utils/apiErrors";
 import { formatSiteLabel } from "../utils/siteDisplay";
 
 const flattenSubDepartments = (rows = [], trail = [], department = null) =>
@@ -329,7 +330,7 @@ export default function EmployeeEdit() {
       navigate("/employees");
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Update failed");
+      alert(formatApiErrorMessage(err, "Update failed"));
     } finally {
       setSaving(false);
     }

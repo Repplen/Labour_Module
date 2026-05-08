@@ -7090,6 +7090,166 @@ hr {
   white-space: nowrap;
 }
 
+.employee-qr-modal__layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.employee-qr-modal__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.employee-qr-modal__canvas {
+  width: 260px;
+  height: 260px;
+  max-width: 100%;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+.employee-qr-modal__details {
+  min-width: 0;
+}
+
+.employee-qr-modal__employee {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.employee-qr-modal__code {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.employee-qr-profile-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)),
+    url("./images/welcome.jpg") center / cover no-repeat;
+}
+
+.employee-qr-profile-card {
+  width: min(920px, 100%);
+  padding: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+}
+
+.employee-qr-profile-card--message {
+  max-width: 520px;
+  text-align: center;
+}
+
+.employee-qr-profile-card--message h1,
+.employee-qr-profile-card__header h1 {
+  margin: 0;
+  color: #111827;
+}
+
+.employee-qr-profile-card__header {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.employee-qr-profile-card__photo,
+.employee-qr-profile-card__photo-fallback {
+  width: 112px;
+  height: 112px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.employee-qr-profile-card__photo {
+  object-fit: cover;
+}
+
+.employee-qr-profile-card__photo-fallback {
+  display: grid;
+  place-items: center;
+  background: #111827;
+  color: #ffffff;
+  font-size: 2.25rem;
+  font-weight: 700;
+}
+
+.employee-qr-profile-card__kicker {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.08em;
+}
+
+.employee-qr-profile-card__code {
+  margin: 4px 0 10px;
+  color: #6b7280;
+}
+
+.employee-qr-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.employee-qr-profile-field {
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.employee-qr-profile-field__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.employee-qr-profile-field__value {
+  margin-top: 4px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.employee-qr-profile-card__updated {
+  margin-top: 18px;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 767.98px) {
+  .employee-qr-modal__layout,
+  .employee-qr-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-qr-profile-card {
+    padding: 20px;
+  }
+
+  .employee-qr-profile-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .checklist-report__search {
   flex: 0 1 340px;
   width: min(340px, 100%);

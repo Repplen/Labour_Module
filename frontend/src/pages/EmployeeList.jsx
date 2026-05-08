@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import EmployeeQrCode from "../components/EmployeeQrCode";
 import { usePermissions } from "../context/usePermissions";
 import { formatDepartmentList } from "../utils/departmentDisplay";
 import { formatSiteList } from "../utils/siteDisplay";
@@ -19,6 +20,14 @@ const getStatusFilterLabel = (value) => {
   if (value === "inactive") return "Inactive only";
   return "";
 };
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 function ViewIcon() {
   return (
@@ -102,6 +111,24 @@ function DeleteIcon() {
   );
 }
 
+function QrIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    >
+      <path d="M2 2h4v4H2zM1 1v6h6V1zm2 2h2v2H3z" />
+      <path d="M10 2h4v4h-4zM9 1v6h6V1zm2 2h2v2h-2z" />
+      <path d="M2 10h4v4H2zM1 9v6h6V9zm2 2h2v2H3z" />
+      <path d="M9 9h2v1h1V9h3v2h-1v1h1v3h-2v-1h-1v1H9v-2h1v-1H9zm2 2v1h1v1h1v-1h1v-1h-2v-1h-1z" />
+    </svg>
+  );
+}
+
 export default function EmployeeList() {
   const { can } = usePermissions();
   const [employees, setEmployees] = useState([]);
@@ -115,6 +142,13 @@ export default function EmployeeList() {
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [qrModalEmployee, setQrModalEmployee] = useState(null);
+  const [qrDetails, setQrDetails] = useState(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrActionLoading, setQrActionLoading] = useState("");
+  const [qrError, setQrError] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrCopyMessage, setQrCopyMessage] = useState("");
 
   const [params] = useSearchParams();
   const department = params.get("department");
@@ -124,6 +158,7 @@ export default function EmployeeList() {
   const canDeleteEmployee = can("employee_master", "delete");
   const canToggleEmployeeStatus = can("employee_master", "status_update");
   const canExportEmployees = can("employee_master", "export");
+  const canManageEmployeeQr = can("employee_master", "view");
   const uploadBaseUrl = useMemo(
     () => (api.defaults.baseURL || "http://localhost:5000/api").replace(/\/api\/?$/, ""),
     []
@@ -302,6 +337,167 @@ export default function EmployeeList() {
       window.URL.revokeObjectURL(url);
     } catch {
       alert("Excel export failed");
+    }
+  };
+
+  const updateEmployeeQrState = (employeeId, details = {}) => {
+    setEmployees((currentValue) =>
+      currentValue.map((employee) =>
+        String(employee._id) === String(employeeId)
+          ? {
+              ...employee,
+              qrCodeUrl: details.qrCodeUrl,
+              qrGeneratedAt: details.qrGeneratedAt,
+              qrEnabled: details.qrEnabled,
+            }
+          : employee
+      )
+    );
+    setQrModalEmployee((currentValue) =>
+      currentValue && String(currentValue._id) === String(employeeId)
+        ? {
+            ...currentValue,
+            qrCodeUrl: details.qrCodeUrl,
+            qrGeneratedAt: details.qrGeneratedAt,
+            qrEnabled: details.qrEnabled,
+          }
+        : currentValue
+    );
+  };
+
+  const loadEmployeeQr = async (employee) => {
+    setQrModalEmployee(employee);
+    setQrDetails(null);
+    setQrDataUrl("");
+    setQrCopyMessage("");
+    setQrError("");
+    setQrLoading(true);
+
+    try {
+      const response = await api.post(`/employees/${employee._id}/qr`, {
+        publicBaseUrl: window.location.origin,
+      });
+      setQrDetails(response.data || null);
+      updateEmployeeQrState(employee._id, response.data || {});
+    } catch (err) {
+      console.error("Employee QR load failed:", err);
+      setQrError(err.response?.data?.message || "Failed to load employee QR code");
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const closeQrModal = () => {
+    if (qrActionLoading) return;
+    setQrModalEmployee(null);
+    setQrDetails(null);
+    setQrDataUrl("");
+    setQrCopyMessage("");
+    setQrError("");
+  };
+
+  const regenerateQr = async () => {
+    if (!qrModalEmployee) return;
+
+    setQrActionLoading("regenerate");
+    setQrError("");
+    setQrCopyMessage("");
+
+    try {
+      const response = await api.post(`/employees/${qrModalEmployee._id}/qr/regenerate`, {
+        publicBaseUrl: window.location.origin,
+      });
+      setQrDataUrl("");
+      setQrDetails(response.data || null);
+      updateEmployeeQrState(qrModalEmployee._id, response.data || {});
+    } catch (err) {
+      console.error("Employee QR regenerate failed:", err);
+      setQrError(err.response?.data?.message || "Failed to regenerate employee QR code");
+    } finally {
+      setQrActionLoading("");
+    }
+  };
+
+  const toggleQrAccess = async () => {
+    if (!qrModalEmployee || !qrDetails) return;
+
+    setQrActionLoading("access");
+    setQrError("");
+    setQrCopyMessage("");
+
+    try {
+      const response = await api.patch(`/employees/${qrModalEmployee._id}/qr/access`, {
+        publicBaseUrl: window.location.origin,
+        qrEnabled: !qrDetails.qrEnabled,
+      });
+      setQrDetails(response.data || null);
+      updateEmployeeQrState(qrModalEmployee._id, response.data || {});
+    } catch (err) {
+      console.error("Employee QR access update failed:", err);
+      setQrError(err.response?.data?.message || "Failed to update employee QR access");
+    } finally {
+      setQrActionLoading("");
+    }
+  };
+
+  const downloadQr = () => {
+    if (!qrDataUrl || !qrDetails) return;
+
+    const anchor = document.createElement("a");
+    anchor.href = qrDataUrl;
+    anchor.download = `${qrDetails.employeeCode || "employee"}-qr.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
+  const printQr = () => {
+    if (!qrDataUrl || !qrDetails) return;
+
+    const printWindow = window.open("", "_blank", "width=420,height=620");
+    if (!printWindow) {
+      alert("Please allow popups to print the QR code.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${escapeHtml(qrDetails.employeeCode || "Employee")} QR</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; text-align: center; color: #111827; }
+            img { width: 280px; height: 280px; }
+            .code { color: #4b5563; margin-top: 4px; }
+            .link { margin-top: 18px; font-size: 11px; word-break: break-all; color: #4b5563; }
+          </style>
+        </head>
+        <body>
+          <h2>${escapeHtml(qrDetails.employeeName || "Employee")}</h2>
+          <div class="code">${escapeHtml(qrDetails.employeeCode || "")}</div>
+          <img src="${qrDataUrl}" alt="Employee QR code" />
+          <div class="link">${escapeHtml(qrDetails.qrCodeUrl || "")}</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const copyQrLink = async () => {
+    if (!qrDetails?.qrCodeUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(qrDetails.qrCodeUrl);
+      setQrCopyMessage("QR link copied");
+    } catch {
+      const input = document.createElement("input");
+      input.value = qrDetails.qrCodeUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+      setQrCopyMessage("QR link copied");
     }
   };
 
@@ -517,7 +713,7 @@ export default function EmployeeList() {
                 <th>Sub Sites</th>
                 <th>Designation</th>
                 <th>Status</th>
-                <th width="220">Actions</th>
+                <th width="270">Actions</th>
               </tr>
             </thead>
 
@@ -682,6 +878,25 @@ export default function EmployeeList() {
                         >
                           <ViewIcon />
                         </Link>
+                        {canManageEmployeeQr ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-dark app-icon-action-btn"
+                            onClick={() => loadEmployeeQr(employee)}
+                            title={`${
+                              employee.qrCodeUrl ? "View" : "Generate"
+                            } QR for ${
+                              employee.employeeName || employee.employeeCode || "employee"
+                            }`}
+                            aria-label={`${
+                              employee.qrCodeUrl ? "View" : "Generate"
+                            } QR for ${
+                              employee.employeeName || employee.employeeCode || "employee"
+                            }`}
+                          >
+                            <QrIcon />
+                          </button>
+                        ) : null}
 
                         {canEditEmployee || canToggleEmployeeStatus || canDeleteEmployee ? (
                           <>
@@ -746,6 +961,189 @@ export default function EmployeeList() {
           onConfirm={confirmStatusChange}
         />
       ) : null}
+
+      {qrModalEmployee ? (
+        <EmployeeQrModal
+          employee={qrModalEmployee}
+          details={qrDetails}
+          loading={qrLoading}
+          actionLoading={qrActionLoading}
+          error={qrError}
+          copyMessage={qrCopyMessage}
+          onClose={closeQrModal}
+          onRegenerate={regenerateQr}
+          onToggleAccess={toggleQrAccess}
+          onDownload={downloadQr}
+          onPrint={printQr}
+          onCopy={copyQrLink}
+          onQrDataUrl={setQrDataUrl}
+          canEditQr={canEditEmployee}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function EmployeeQrModal({
+  employee,
+  details,
+  loading,
+  actionLoading,
+  error,
+  copyMessage,
+  onClose,
+  onRegenerate,
+  onToggleAccess,
+  onDownload,
+  onPrint,
+  onCopy,
+  onQrDataUrl,
+  canEditQr,
+}) {
+  const qrUrl = details?.qrCodeUrl || "";
+  const employeeName = details?.employeeName || employee.employeeName || "Employee";
+  const employeeCode = details?.employeeCode || employee.employeeCode || "";
+  const generatedLabel = details?.qrGeneratedAt
+    ? new Date(details.qrGeneratedAt).toLocaleString()
+    : "";
+  const isActionBusy = Boolean(actionLoading);
+
+  return (
+    <div
+      className="modal fade show d-block app-modal-overlay"
+      tabIndex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="employee-qr-modal-title"
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-content employee-qr-modal">
+          <div className="modal-header">
+            <div>
+              <h5 className="modal-title mb-1" id="employee-qr-modal-title">
+                Employee QR Code
+              </h5>
+              <div className="text-muted small">
+                {employeeName} {employeeCode ? `| ${employeeCode}` : ""}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Close"
+              onClick={onClose}
+              disabled={isActionBusy}
+            />
+          </div>
+
+          <div className="modal-body">
+            {loading ? (
+              <div className="text-center py-5">Preparing employee QR code...</div>
+            ) : error ? (
+              <div className="alert alert-danger mb-0">{error}</div>
+            ) : details ? (
+              <div className="employee-qr-modal__layout">
+                <div className="employee-qr-modal__preview">
+                  <EmployeeQrCode
+                    value={qrUrl}
+                    size={260}
+                    className="employee-qr-modal__canvas"
+                    onDataUrl={onQrDataUrl}
+                  />
+                  <span
+                    className={`badge ${
+                      details.qrEnabled ? "bg-success" : "bg-secondary"
+                    } mt-3`}
+                  >
+                    {details.qrEnabled ? "QR Active" : "QR Disabled"}
+                  </span>
+                </div>
+
+                <div className="employee-qr-modal__details">
+                  <div className="employee-qr-modal__employee">{employeeName}</div>
+                  <div className="employee-qr-modal__code">{employeeCode || "No code"}</div>
+                  <label className="form-label mt-3">QR Link</label>
+                  <input className="form-control" value={qrUrl} readOnly />
+                  <div className="form-help mt-2">
+                    This QR stores only the secure URL. Scans fetch the latest employee master
+                    data from the database.
+                  </div>
+                  {generatedLabel ? (
+                    <div className="small text-muted mt-2">Generated: {generatedLabel}</div>
+                  ) : null}
+                  {copyMessage ? (
+                    <div className="alert alert-success py-2 mt-3 mb-0">{copyMessage}</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="modal-footer d-flex flex-wrap justify-content-between gap-2">
+            <div className="d-flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onCopy}
+                disabled={!qrUrl || isActionBusy}
+              >
+                Copy Link
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-success"
+                onClick={onDownload}
+                disabled={!qrUrl || isActionBusy}
+              >
+                Download QR
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={onPrint}
+                disabled={!qrUrl || isActionBusy}
+              >
+                Print QR
+              </button>
+            </div>
+
+            <div className="d-flex flex-wrap gap-2">
+              {canEditQr ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-outline-warning"
+                    onClick={onRegenerate}
+                    disabled={!details || isActionBusy}
+                  >
+                    {actionLoading === "regenerate" ? "Regenerating..." : "Regenerate"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${details?.qrEnabled ? "btn-outline-danger" : "btn-success"}`}
+                    onClick={onToggleAccess}
+                    disabled={!details || isActionBusy}
+                  >
+                    {actionLoading === "access"
+                      ? "Updating..."
+                      : details?.qrEnabled
+                      ? "Disable QR"
+                      : "Enable QR"}
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onClose}
+                disabled={isActionBusy}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

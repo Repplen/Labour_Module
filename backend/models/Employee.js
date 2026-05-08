@@ -105,6 +105,27 @@ const employeeSchema = new mongoose.Schema(
       ref: "Employee",
       default: []
     },
+    qrToken: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      index: true
+    },
+    qrCodeUrl: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    qrGeneratedAt: {
+      type: Date,
+      default: null
+    },
+    qrEnabled: {
+      type: Boolean,
+      default: true,
+      index: true
+    },
 
     superiorEmployee: {
       type: mongoose.Schema.Types.ObjectId,

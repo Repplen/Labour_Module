@@ -33,6 +33,7 @@ const {
   getChecklistTransferHistory,
   getChecklistTaskById,
   getChecklistTaskReport,
+  getChecklistTaskReportOptions,
   getChecklists,
   getGeneratedChecklistTasks,
   getMyChecklistTasks,
@@ -133,19 +134,39 @@ router.get(
 router.get(
   "/tasks/report/export/excel",
   auth,
+  requireAnyPermission([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]),
   requirePermission("reports", "export"),
   exportChecklistTaskReportExcel
 );
 router.get(
   "/tasks/report/export/pdf",
   auth,
+  requireAnyPermission([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]),
   requirePermission("reports", "export"),
   exportChecklistTaskReportPdf
 );
 router.get(
+  "/tasks/report/options",
+  auth,
+  requireAnyPermission([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]),
+  getChecklistTaskReportOptions
+);
+router.get(
   "/tasks/report",
   auth,
-  requirePermission("reports", "report_view"),
+  requireAnyPermission([
+    { moduleKey: "reports", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "report_view" },
+  ]),
   getChecklistTaskReport
 );
 router.get(
@@ -172,6 +193,7 @@ router.get(
   requireAnyPermission([
     { moduleKey: "assigned_checklists", actionKey: "view" },
     { moduleKey: "approval_inbox", actionKey: "view" },
+    { moduleKey: "reports", actionKey: "view" },
     { moduleKey: "reports", actionKey: "report_view" },
     { moduleKey: "checklist_master", actionKey: "view" },
   ]),
