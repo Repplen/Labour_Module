@@ -115,7 +115,23 @@ const checklistTaskPopulateQuery = [
     select: "employeeCode employeeName",
   },
   {
+    path: "rejectedBy",
+    select: "employeeCode employeeName",
+  },
+  {
+    path: "approvedBy",
+    select: "employeeCode employeeName",
+  },
+  {
     path: "approvalSteps.approverEmployee",
+    select: "employeeCode employeeName",
+  },
+  {
+    path: "approvalHistory.actorEmployee",
+    select: "employeeCode employeeName",
+  },
+  {
+    path: "approvalHistory.approverEmployee",
     select: "employeeCode employeeName",
   },
   {
@@ -279,7 +295,7 @@ const applyNilTaskMarkState = (task) => {
   task.baseMark = null;
   task.delayPenaltyPerDay = null;
   task.advanceBonusPerDay = null;
-  task.finalMark = 0;
+  task.finalMark = null;
 };
 
 const parseOptionalNumber = (value) => {
@@ -2122,7 +2138,46 @@ const parseTaskItemResponses = (rawValue) =>
     ),
   }));
 
+const toPlainObject = (value) =>
+  value && typeof value.toObject === "function" ? value.toObject() : { ...(value || {}) };
+
+const buildTaskItemHistorySnapshot = (items = []) =>
+  (Array.isArray(items) ? items : []).map((item) => {
+    const plainItem = toPlainObject(item);
+
+    return {
+      checklistItemId: normalizeText(plainItem.checklistItemId || plainItem._id),
+      label: normalizeText(plainItem.label),
+      employeeAnswerRemark: normalizeText(
+        plainItem.employeeAnswerRemark || plainItem.answer || plainItem.remarks
+      ),
+      superiorAnswerRemark: normalizeText(plainItem.superiorAnswerRemark),
+    };
+  });
+
+const appendTaskApprovalHistory = (task, entry = {}) => {
+  const existingHistory = Array.isArray(task.approvalHistory)
+    ? task.approvalHistory.map((historyEntry) => toPlainObject(historyEntry))
+    : [];
+
+  task.approvalHistory = [
+    ...existingHistory,
+    {
+      action: entry.action,
+      approvalType: normalizeApprovalType(entry.approvalType || task.approvalType),
+      status: normalizeText(entry.status || task.status),
+      actorEmployee: entry.actorEmployee || null,
+      approverEmployee: entry.approverEmployee || null,
+      approvalLevel: entry.approvalLevel || null,
+      remarks: normalizeText(entry.remarks),
+      actedAt: entry.actedAt || new Date(),
+      itemResponses: buildTaskItemHistorySnapshot(entry.itemResponses || task.checklistItems),
+    },
+  ];
+};
+
 const applyTaskSubmission = ({ task, body, files = [] }) => {
+  const wasRejected = normalizeText(task?.status).toLowerCase() === "rejected";
   const submissionType = normalizeApprovalType(body?.submissionType || body?.approvalType);
   const responses = parseTaskItemResponses(body.itemResponses);
   const responseMap = new Map(
@@ -2143,7 +2198,7 @@ const applyTaskSubmission = ({ task, body, files = [] }) => {
       ...item.toObject(),
       answer: resolvedEmployeeAnswer,
       employeeAnswerRemark: resolvedEmployeeAnswer,
-      superiorAnswerRemark: normalizeText(item.superiorAnswerRemark),
+      superiorAnswerRemark: wasRejected ? "" : normalizeText(item.superiorAnswerRemark),
       verified: resolvedEmployeeAnswer ? true : response.verified === true,
       remarks: resolvedEmployeeAnswer,
     };
@@ -2162,7 +2217,16 @@ const applyTaskSubmission = ({ task, body, files = [] }) => {
     };
   }
 
-  const firstPendingStepIndex = task.approvalSteps.findIndex(
+  const approvalSteps = Array.isArray(task.approvalSteps) ? task.approvalSteps : [];
+  const nextApprovalSteps = wasRejected
+    ? approvalSteps.map((step) => ({
+        ...toPlainObject(step),
+        status: "waiting",
+        remarks: "",
+        actedAt: null,
+      }))
+    : approvalSteps.map((step) => toPlainObject(step));
+  const firstPendingStepIndex = nextApprovalSteps.findIndex(
     (step) => step.status === "waiting"
   );
 
@@ -2175,14 +2239,31 @@ const applyTaskSubmission = ({ task, body, files = [] }) => {
 
   task.checklistItems = nextItems;
   task.employeeRemarks = normalizeText(body.employeeRemarks);
-  task.employeeAttachments = (files || []).map((file) => ({
+  const uploadedAttachments = (files || []).map((file) => ({
     fileName: file.filename,
     originalName: file.originalname,
     filePath: file.filename ? `/uploads/${file.filename}` : "",
     mimeType: normalizeText(file.mimetype),
     size: Number(file.size || 0),
   }));
+  task.employeeAttachments = wasRejected
+    ? [
+        ...(Array.isArray(task.employeeAttachments)
+          ? task.employeeAttachments.map((file) => toPlainObject(file))
+          : []),
+        ...uploadedAttachments,
+      ]
+    : uploadedAttachments;
   task.submittedAt = new Date();
+  if (wasRejected) {
+    task.resubmittedAt = task.submittedAt;
+  }
+  task.rejectedBy = null;
+  task.rejectedAt = null;
+  task.rejectionRemarks = "";
+  task.approvedBy = null;
+  task.approvedAt = null;
+  task.completedAt = null;
   task.submissionTimingStatus = getSubmissionTimingStatus({
     submittedAt: task.submittedAt,
     dependencyTargetDateTime: task.dependencyTargetDateTime,
@@ -2216,13 +2297,21 @@ const applyTaskSubmission = ({ task, body, files = [] }) => {
     task.status = "submitted";
   }
 
-  task.currentApprovalEmployee = task.approvalSteps[firstPendingStepIndex].approverEmployee;
-  task.approvalSteps = task.approvalSteps.map((step, index) => ({
-    ...step.toObject(),
+  task.currentApprovalEmployee = nextApprovalSteps[firstPendingStepIndex].approverEmployee;
+  task.approvalSteps = nextApprovalSteps.map((step, index) => ({
+    ...step,
     status: index === firstPendingStepIndex ? "pending" : step.status,
   }));
+  appendTaskApprovalHistory(task, {
+    action: wasRejected ? "resubmitted" : "submitted",
+    actorEmployee: task.assignedEmployee,
+    status: task.status,
+    approvalType: task.approvalType,
+    actedAt: task.submittedAt,
+    itemResponses: task.checklistItems,
+  });
 
-  return { payload: task };
+  return { payload: task, wasResubmission: wasRejected };
 };
 
 const canAccessChecklistTask = (task, user) => {
@@ -2250,16 +2339,24 @@ const canAccessChecklistTask = (task, user) => {
 
 const applyChecklistDecision = ({ task, action, remarks, itemResponses }) => {
   const normalizedAction = normalizeText(action).toLowerCase();
+  const normalizedRemarks = normalizeText(remarks);
   const taskIsNil = isNilChecklistTask(task);
   const allowedActions = taskIsNil
     ? ["nil_approve", "reject"]
-    : ["approve", "nil_approve", "reject"];
+    : ["approve", "reject"];
 
   if (!allowedActions.includes(normalizedAction)) {
     return {
       message: taskIsNil
         ? "Nil approval tasks can only be nil approved or rejected"
-        : "Approval action must be approve, nil_approve, or reject",
+        : "Normal approval tasks can only be approved or rejected",
+      status: 400,
+    };
+  }
+
+  if (normalizedAction === "reject" && !normalizedRemarks) {
+    return {
+      message: "Rejection remark is required",
       status: 400,
     };
   }
@@ -2301,7 +2398,7 @@ const applyChecklistDecision = ({ task, action, remarks, itemResponses }) => {
     (item) => item.isRequired && !normalizeText(item.superiorAnswerRemark)
   );
 
-  if (missingRequiredItem) {
+  if (normalizedAction !== "reject" && missingRequiredItem) {
     return {
       message: `Required question "${missingRequiredItem.label}" must include the superior answer or remark before approval action`,
       status: 400,
@@ -2312,12 +2409,12 @@ const applyChecklistDecision = ({ task, action, remarks, itemResponses }) => {
 
   const now = new Date();
   const nextSteps = task.approvalSteps.map((step, index) => {
-    if (index !== currentStepIndex) return step.toObject();
+    if (index !== currentStepIndex) return toPlainObject(step);
 
     return {
-      ...step.toObject(),
+      ...toPlainObject(step),
       status: normalizedAction === "reject" ? "rejected" : "approved",
-      remarks: normalizeText(remarks),
+      remarks: normalizedRemarks,
       actedAt: now,
     };
   });
@@ -2330,8 +2427,22 @@ const applyChecklistDecision = ({ task, action, remarks, itemResponses }) => {
     }
 
     task.status = "rejected";
+    task.rejectedBy = task.currentApprovalEmployee || nextSteps[currentStepIndex]?.approverEmployee || null;
+    task.rejectedAt = now;
+    task.rejectionRemarks = normalizedRemarks;
     task.currentApprovalEmployee = null;
-    task.completedAt = now;
+    task.completedAt = null;
+    appendTaskApprovalHistory(task, {
+      action: "rejected",
+      actorEmployee: task.rejectedBy,
+      approverEmployee: nextSteps[currentStepIndex]?.approverEmployee,
+      approvalLevel: nextSteps[currentStepIndex]?.approvalLevel,
+      remarks: normalizedRemarks,
+      status: task.status,
+      approvalType: task.approvalType,
+      actedAt: now,
+      itemResponses: task.checklistItems,
+    });
     return { payload: task };
   }
 
@@ -2352,13 +2463,37 @@ const applyChecklistDecision = ({ task, action, remarks, itemResponses }) => {
       ? "nil_for_approval"
       : "submitted";
     task.completedAt = null;
+    appendTaskApprovalHistory(task, {
+      action: normalizedAction === "nil_approve" ? "nil_approved" : "approved",
+      actorEmployee: nextSteps[currentStepIndex]?.approverEmployee,
+      approverEmployee: nextSteps[currentStepIndex]?.approverEmployee,
+      approvalLevel: nextSteps[currentStepIndex]?.approvalLevel,
+      remarks: normalizedRemarks,
+      status: task.status,
+      approvalType: task.approvalType,
+      actedAt: now,
+      itemResponses: task.checklistItems,
+    });
     return { payload: task };
   }
 
   task.status =
     taskIsNil || normalizedAction === "nil_approve" ? "nil_approved" : "approved";
   task.currentApprovalEmployee = null;
+  task.approvedBy = nextSteps[currentStepIndex]?.approverEmployee || null;
+  task.approvedAt = now;
   task.completedAt = now;
+  appendTaskApprovalHistory(task, {
+    action: task.status === "nil_approved" ? "nil_approved" : "approved",
+    actorEmployee: task.approvedBy,
+    approverEmployee: nextSteps[currentStepIndex]?.approverEmployee,
+    approvalLevel: nextSteps[currentStepIndex]?.approvalLevel,
+    remarks: normalizedRemarks,
+    status: task.status,
+    approvalType: task.approvalType,
+    actedAt: now,
+    itemResponses: task.checklistItems,
+  });
   return { payload: task };
 };
 

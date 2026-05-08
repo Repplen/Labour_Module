@@ -48,6 +48,23 @@ const getEmployeeTaskAnswer = (value) => {
 
 const getSuperiorTaskAnswer = (value) => normalizeTaskText(value?.superiorAnswerRemark);
 
+const formatHistoryActionLabel = (action) => {
+  switch (normalizeTaskText(action).toLowerCase()) {
+    case "submitted":
+      return "Submitted";
+    case "resubmitted":
+      return "Resubmitted";
+    case "approved":
+      return "Approved";
+    case "nil_approved":
+      return "Nil Approved";
+    case "rejected":
+      return "Rejected";
+    default:
+      return action || "-";
+  }
+};
+
 const buildTaskStageSummary = (task) => {
   const normalizedStatus = String(task?.status || "").trim().toLowerCase();
   const isNilTaskFlow = isNilChecklistTask(task);
@@ -329,10 +346,28 @@ export default function ChecklistTaskView() {
     String(task?.currentApprovalEmployee?._id || task?.currentApprovalEmployee || "") ===
     String(user?.id || "");
   const isNilTaskFlow = isNilChecklistTask(task);
-  const isWaitingOnDependency =
-    String(task?.status || "").trim().toLowerCase() === "waiting_dependency";
+  const normalizedTaskStatus = String(task?.status || "").trim().toLowerCase();
+  const isRejectedTask = normalizedTaskStatus === "rejected";
+  const isWaitingOnDependency = normalizedTaskStatus === "waiting_dependency";
+  const approvalHistory = Array.isArray(task?.approvalHistory) ? task.approvalHistory : [];
+  const latestRejection =
+    [...approvalHistory]
+      .reverse()
+      .find((entry) => normalizeTaskText(entry?.action).toLowerCase() === "rejected") ||
+    (isRejectedTask
+      ? {
+          remarks:
+            task?.rejectionRemarks ||
+            task?.approvalSteps?.find?.((step) => step?.status === "rejected")?.remarks,
+          actedAt:
+            task?.rejectedAt ||
+            task?.approvalSteps?.find?.((step) => step?.status === "rejected")?.actedAt,
+          actorEmployee: task?.rejectedBy,
+        }
+      : null);
+  const latestRejectionRemark = normalizeTaskText(latestRejection?.remarks);
 
-  const canSubmit = isAssignedEmployee && task?.status === "open";
+  const canSubmit = isAssignedEmployee && ["open", "rejected"].includes(normalizedTaskStatus);
   const supportsVoiceRecording =
     typeof window !== "undefined" &&
     typeof window.MediaRecorder !== "undefined" &&
@@ -363,6 +398,8 @@ export default function ChecklistTaskView() {
       : "Review the submitted questions and enter your superior remark for each required question before approving or rejecting."
     : isWaitingOnDependency
     ? `This task is locked until ${formatChecklistDependencyLabel(task)} is completed.`
+    : isRejectedTask && isAssignedEmployee
+    ? "Review the rejection reason, correct the task answers, and resubmit it for approval."
     : canSubmit
     ? "Review the assigned task, answer each question, and submit it for approval."
     : isAssignedEmployee
@@ -817,6 +854,19 @@ export default function ChecklistTaskView() {
               <span className="badge text-bg-danger">Rejected</span>
             ) : null}
           </div>
+
+          {isRejectedTask ? (
+            <div className="alert alert-danger mt-3 mb-0" role="alert">
+              <div className="fw-semibold">Rejection Reason</div>
+              <div>{latestRejectionRemark || "No rejection remark was recorded."}</div>
+              <div className="small mt-1">
+                {latestRejection?.actorEmployee
+                  ? `Rejected by ${formatEmployeeLabel(latestRejection.actorEmployee)}`
+                  : "Rejected"}
+                {latestRejection?.actedAt ? ` on ${formatDateTime(latestRejection.actedAt)}` : ""}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1121,22 +1171,26 @@ export default function ChecklistTaskView() {
 
           {canSubmit && (
             <div className="d-flex flex-wrap justify-content-end gap-2 mt-3">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => handleSubmitTask("nil")}
-                disabled={saving || recordingState !== "idle"}
-              >
-                {saving ? "Submitting..." : "Nil For Approval"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleSubmitTask("normal")}
-                disabled={saving || recordingState !== "idle"}
-              >
-                {saving ? "Submitting..." : "Submit For Approval"}
-              </button>
+              {!isRejectedTask || isNilTaskFlow ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => handleSubmitTask("nil")}
+                  disabled={saving || recordingState !== "idle"}
+                >
+                  {saving ? "Submitting..." : "Nil For Approval"}
+                </button>
+              ) : null}
+              {!isRejectedTask || !isNilTaskFlow ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleSubmitTask("normal")}
+                  disabled={saving || recordingState !== "idle"}
+                >
+                  {saving ? "Submitting..." : "Submit For Approval"}
+                </button>
+              ) : null}
             </div>
           )}
         </div>
@@ -1182,6 +1236,34 @@ export default function ChecklistTaskView() {
             </table>
           </div>
 
+          {approvalHistory.length ? (
+            <div className="mt-4">
+              <h6 className="mb-2">Activity History</h6>
+              <div className="table-responsive">
+                <table className="table table-sm table-bordered align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Action</th>
+                      <th>Employee</th>
+                      <th>Remarks</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approvalHistory.map((entry, index) => (
+                      <tr key={entry._id || `${entry.action}-${entry.actedAt}-${index}`}>
+                        <td>{formatHistoryActionLabel(entry.action)}</td>
+                        <td>{formatEmployeeLabel(entry.actorEmployee || entry.approverEmployee)}</td>
+                        <td>{entry.remarks || "-"}</td>
+                        <td>{formatDateTime(entry.actedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
           {canDecide && (
             <div className="border rounded p-3 mt-3">
               <div className="small text-muted mb-3">
@@ -1196,31 +1278,35 @@ export default function ChecklistTaskView() {
                 onChange={(event) => setDecisionRemarks(event.target.value)}
                 placeholder="Add an approval or rejection summary if needed"
               />
+              <div className="form-text mb-3">A rejection remark is required before rejecting.</div>
 
               <div className="d-flex justify-content-end gap-2">
+                {isNilTaskFlow ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline-info"
+                    onClick={() => handleDecision("nil_approve")}
+                    disabled={decisionLoading || !requiredSuperiorRemarksComplete}
+                  >
+                    {decisionLoading ? "Saving..." : "Nil Approve"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => handleDecision("approve")}
+                    disabled={decisionLoading || !requiredSuperiorRemarksComplete}
+                  >
+                    {decisionLoading ? "Saving..." : "Approve"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-danger"
                   onClick={() => handleDecision("reject")}
-                  disabled={decisionLoading || !requiredSuperiorRemarksComplete}
+                  disabled={decisionLoading || !normalizeTaskText(decisionRemarks)}
                 >
                   {decisionLoading ? "Saving..." : "Reject"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={() => handleDecision("nil_approve")}
-                  disabled={decisionLoading || !requiredSuperiorRemarksComplete}
-                >
-                  {decisionLoading ? "Saving..." : "Nil Approve"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-success"
-                  onClick={() => handleDecision("approve")}
-                  disabled={decisionLoading || !requiredSuperiorRemarksComplete || isNilTaskFlow}
-                >
-                  {decisionLoading ? "Saving..." : "Approve"}
                 </button>
               </div>
             </div>

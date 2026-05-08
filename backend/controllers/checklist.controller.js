@@ -2659,7 +2659,7 @@ const formatChecklistTaskStatusLabel = (status) => {
     case "nil_for_approval":
       return "Nil For Approval";
     case "approved":
-      return "Approved / Completed";
+      return "Approved";
     case "nil_approved":
       return "Nil Approved";
     case "rejected":
@@ -4929,8 +4929,10 @@ exports.submitChecklistTask = async (req, res) => {
       return res.status(400).json({ message: getDependencyBlockedMessage(task) });
     }
 
-    if (task.status !== "open") {
-      return res.status(400).json({ message: "Only assigned checklist tasks can be submitted" });
+    if (!["open", "rejected"].includes(String(task.status || "").trim().toLowerCase())) {
+      return res
+        .status(400)
+        .json({ message: "Only assigned or rejected checklist tasks can be submitted" });
     }
 
     const submissionResult = applyTaskSubmission({
@@ -4952,10 +4954,13 @@ exports.submitChecklistTask = async (req, res) => {
     );
 
     return res.json({
-      message:
-        String(task.approvalType || "").trim().toLowerCase() === "nil"
-          ? "Task submitted for nil approval successfully"
-          : "Task answers submitted successfully",
+      message: submissionResult.wasResubmission
+        ? String(task.approvalType || "").trim().toLowerCase() === "nil"
+          ? "Task resubmitted for nil approval successfully"
+          : "Task resubmitted for approval successfully"
+        : String(task.approvalType || "").trim().toLowerCase() === "nil"
+        ? "Task submitted for nil approval successfully"
+        : "Task answers submitted successfully",
       task: populatedTask,
     });
   } catch (err) {
@@ -4991,7 +4996,7 @@ exports.decideChecklistTask = async (req, res) => {
     const decisionResult = applyChecklistDecision({
       task,
       action: req.body.action,
-      remarks: req.body.remarks,
+      remarks: req.body.remarks || req.body.remark || req.body.comments,
       itemResponses: req.body.itemResponses,
     });
 

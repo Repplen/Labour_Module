@@ -1,118 +1,164 @@
-# Checklist App IIS Deployment (Frontend + Backend)
+# Checklist App IIS Deployment
 
-This setup hosts:
-- React frontend from IIS (static files)
-- Node/Express backend on `127.0.0.1:5000`
+This project is deployed on IIS as:
+
+- React/Vite frontend served from `frontend/dist`
+- Node/Express backend running separately on `127.0.0.1:5000`
 - IIS reverse proxy for `/api/*` and `/uploads/*`
+- React Router fallback to `/index.html`
 
-The project already includes an IIS rewrite file at:
-- `frontend/public/web.config`
+The IIS rewrite file is kept at `frontend/public/web.config`. Vite copies it to `frontend/dist/web.config` when you run the production build.
 
-When you run `npm run build` in `frontend`, this `web.config` is copied into `frontend/dist`.
+## Project Path
 
-## 1. Prerequisites on Windows Server
+Current local project root:
 
-Install:
+```powershell
+C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy
+```
+
+## Prerequisites
+
+Install these on the Windows/IIS machine:
+
 - IIS with Static Content
-- URL Rewrite module
-- Application Request Routing (ARR)
+- IIS URL Rewrite module
+- IIS Application Request Routing (ARR)
 - Node.js LTS
-- MongoDB (local or Atlas)
+- MongoDB local service or MongoDB Atlas
+- NSSM, if you want the backend to run as a Windows service
 
-In IIS:
-- Open server node -> `Application Request Routing Cache` -> `Server Proxy Settings`
-- Enable `Proxy`
+ARR must have proxy enabled. The included `scripts/setup-iis.ps1` tries to enable it automatically when ARR is installed.
 
-## 2. Build Frontend
+## Quick Setup
+
+Run PowerShell as Administrator:
 
 ```powershell
-cd "C:\Users\REPPLEN\Desktop\Check List\frontend"
+cd "C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy"
 npm ci
+npm --prefix backend ci
+npm --prefix frontend ci
 npm run build
 ```
 
-Publish folder:
-- `frontend/dist`
-
-## 3. Prepare Backend
+Create or update the IIS site:
 
 ```powershell
-cd "C:\Users\REPPLEN\Desktop\Check List\backend"
-npm ci
-copy .env.example .env
+npm run iis:setup -- -SiteName ChecklistApp -Port 812 -EnableWindowsFeatures -OpenFirewall
 ```
 
-Update `backend/.env` for production:
-- `NODE_ENV=production`
-- `PORT=5000`
-- `MONGODB_URI=...`
-- `JWT_SECRET=...` (strong secret)
-- `CORS_ORIGIN=https://your-domain.com`
-
-## 4. Run Backend as Windows Service (NSSM recommended)
-
-Install NSSM, then run (example):
+Install or update the backend Windows service:
 
 ```powershell
-nssm install ChecklistBackend "C:\Program Files\nodejs\node.exe" "C:\Users\REPPLEN\Desktop\Check List\backend\server.js"
-nssm set ChecklistBackend AppDirectory "C:\Users\REPPLEN\Desktop\Check List\backend"
-nssm set ChecklistBackend Start SERVICE_AUTO_START
-nssm start ChecklistBackend
+npm run service:install -- -ServiceName ChecklistBackend -Port 5000
 ```
 
-## 5. Create IIS Site
+If `nssm.exe` is not on PATH, pass it directly:
 
-1. Create site in IIS (for example `ChecklistApp`)
-2. Physical path -> `C:\Users\REPPLEN\Desktop\Check List\frontend\dist`
-3. App Pool settings:
-   - `.NET CLR Version`: `No Managed Code`
-   - `Managed pipeline`: `Integrated`
-4. Bind your hostname and SSL certificate
-
-## 6. Why This Works
-
-`frontend/dist/web.config` handles:
-- `/api/*` -> `http://127.0.0.1:5000/api/*`
-- `/uploads/*` -> `http://127.0.0.1:5000/uploads/*`
-- all other non-file routes -> `/index.html` (React Router fallback)
-
-## 7. Verify
-
-After site + service start:
-- `https://your-domain.com` -> frontend should load
-- `https://your-domain.com/api/auth/login` -> backend route reachable
-- `https://your-domain.com/uploads/...` -> file access works
-
-## 8. Deploy Updates
-
-Frontend updates:
 ```powershell
-cd "C:\Users\REPPLEN\Desktop\Check List\frontend"
+npm run service:install -- -NssmPath "C:\tools\nssm\nssm.exe"
+```
+
+## Backend Environment
+
+Update `backend\.env` before production use:
+
+```dotenv
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/employeeapp
+JWT_SECRET=replace-with-a-long-random-production-secret
+JWT_EXPIRES_IN=30d
+CORS_ORIGIN=http://localhost:812,http://your-domain.com
+REQUEST_LOG_ENABLED=true
+```
+
+Use your real IIS URL in `CORS_ORIGIN`. If you bind HTTPS, include the `https://...` origin.
+
+For IIS hosting, do not set `VITE_API_BASE_URL` unless the API is hosted on a different domain. The frontend defaults to same-origin `/api`, and IIS proxies that to the backend.
+
+## Manual IIS Setup
+
+If you prefer IIS Manager instead of the script:
+
+1. Build the frontend with `npm run build`.
+2. Create an IIS app pool named `ChecklistApp-AppPool`.
+3. Set `.NET CLR Version` to `No Managed Code`.
+4. Create an IIS site named `ChecklistApp`.
+5. Set physical path to `C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy\frontend\dist`.
+6. Bind HTTP to port `812`, or use your real hostname/SSL binding.
+7. Open IIS server node, then `Application Request Routing Cache`, then `Server Proxy Settings`.
+8. Enable `Proxy`.
+9. Run the backend on port `5000`, preferably with NSSM.
+
+## Verify
+
+After IIS and the backend service are running:
+
+```powershell
+Invoke-WebRequest http://localhost:812/
+Invoke-WebRequest http://localhost:812/api/health
+Invoke-WebRequest http://127.0.0.1:5000/api/health
+```
+
+Expected API health response:
+
+```json
+{"ok":true}
+```
+
+## Deploy Updates
+
+Frontend update:
+
+```powershell
+cd "C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy"
 npm run build
+iisreset
 ```
-Then copy new `dist` content to IIS site path.
 
-Backend updates:
-- Pull/update backend code
-- Run `npm ci` if dependencies changed
-- Restart service:
+Backend update:
+
 ```powershell
+cd "C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy"
+npm --prefix backend ci
 nssm restart ChecklistBackend
 ```
 
-## 9. Troubleshooting: HTTP Error 403.14
+## Troubleshooting
 
-If you see:
-- `HTTP Error 403.14 - Forbidden`
-- `Physical Path: ...\backend`
+`HTTP Error 403.14 - Forbidden`
 
-then IIS is pointing to the wrong folder. Fix it like this:
+IIS is pointing to the wrong folder. Set the site physical path to:
 
-1. In IIS, open your site -> `Basic Settings`.
-2. Set `Physical path` to:
-   - `C:\Users\REPPLEN\Desktop\Check List\frontend\dist`
-3. Keep backend running separately on `127.0.0.1:5000` (Node/NSSM service).
-4. Confirm `frontend\dist\web.config` exists (it contains `/api` and `/uploads` reverse-proxy rules).
-5. Restart IIS site and test:
-   - `http://localhost:812/` -> React app
-   - `http://localhost:812/api/health` -> `{"ok":true}`
+```powershell
+C:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy\frontend\dist
+```
+
+`HTTP Error 500.19`
+
+IIS cannot read the rewrite rules. Install IIS URL Rewrite and confirm `frontend\dist\web.config` exists.
+
+`502` or `/api/health` fails through IIS
+
+Check that ARR is installed, ARR proxy is enabled, and the backend service is running on `127.0.0.1:5000`.
+
+```powershell
+Get-Service ChecklistBackend
+Invoke-WebRequest http://127.0.0.1:5000/api/health
+```
+
+`Origin not allowed by CORS`
+
+Add the exact browser origin to `backend\.env`:
+
+```dotenv
+CORS_ORIGIN=http://localhost:812,http://your-domain.com
+```
+
+Then restart the backend service:
+
+```powershell
+nssm restart ChecklistBackend
+```

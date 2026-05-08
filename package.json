@@ -17,6 +17,8 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "npm --prefix frontend run build",
+    "iis:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-iis.ps1",
+    "service:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-backend-service.ps1",
     "lint": "npm --prefix frontend run lint",
     "test": "npm --prefix backend run test && npm --prefix frontend run test",
     "test:e2e": "playwright test",

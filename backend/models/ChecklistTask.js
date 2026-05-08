@@ -110,6 +110,83 @@ const checklistTaskApprovalStepSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const checklistTaskHistoryItemSchema = new mongoose.Schema(
+  {
+    checklistItemId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    label: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    employeeAnswerRemark: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    superiorAnswerRemark: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
+const checklistTaskApprovalHistorySchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum: ["submitted", "resubmitted", "approved", "nil_approved", "rejected"],
+      required: true,
+      index: true,
+    },
+    approvalType: {
+      type: String,
+      enum: ["normal", "nil"],
+      default: "normal",
+    },
+    status: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    actorEmployee: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+    approverEmployee: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+    approvalLevel: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
+    remarks: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    actedAt: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    itemResponses: {
+      type: [checklistTaskHistoryItemSchema],
+      default: [],
+    },
+  },
+  { _id: true }
+);
+
 const checklistTaskSchema = new mongoose.Schema(
   {
     taskNumber: {
@@ -273,6 +350,35 @@ const checklistTaskSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+      index: true,
+    },
+    rejectedAt: {
+      type: Date,
+      default: null,
+    },
+    rejectionRemarks: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    resubmittedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+      index: true,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
     status: {
       type: String,
       enum: [
@@ -318,6 +424,10 @@ const checklistTaskSchema = new mongoose.Schema(
     },
     approvalSteps: {
       type: [checklistTaskApprovalStepSchema],
+      default: [],
+    },
+    approvalHistory: {
+      type: [checklistTaskApprovalHistorySchema],
       default: [],
     },
     completedAt: {

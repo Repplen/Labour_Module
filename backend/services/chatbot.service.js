@@ -36,6 +36,12 @@ const markFormatter = new Intl.NumberFormat("en-IN", {
 
 const normalizeText = (value) => String(value || "").trim();
 const normalizeId = (value) => String(value?._id || value || "").trim();
+const scoredChecklistTaskFilter = {
+  finalMark: { $ne: null },
+  approvalType: { $ne: "nil" },
+  isNilApproval: { $ne: true },
+  status: { $nin: ["nil_for_approval", "nil_approved"] },
+};
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -914,7 +920,7 @@ const buildEmployeeMarksReply = async (user) => {
   const markRows = await ChecklistTask.find(
     {
       assignedEmployee: user.id,
-      finalMark: { $ne: null },
+      ...scoredChecklistTaskFilter,
     },
     "taskNumber checklistName finalMark completedAt occurrenceDate"
   )
@@ -964,8 +970,8 @@ const buildManagerMarksReply = async (user) => {
   const markRows = await ChecklistTask.find(
     {
       ...taskScope,
-      finalMark: { $ne: null },
       assignedEmployee: { $ne: null },
+      ...scoredChecklistTaskFilter,
     },
     "assignedEmployee finalMark"
   ).lean();

@@ -16,6 +16,12 @@ const {
 const normalizeId = (value) => String(value?._id || value || "").trim();
 const normalizeText = (value) => String(value || "").trim();
 const normalizeIdentityValue = (value) => normalizeText(value).toLowerCase();
+const scoredChecklistTaskFilter = {
+  finalMark: { $ne: null },
+  approvalType: { $ne: "nil" },
+  isNilApproval: { $ne: true },
+  status: { $nin: ["nil_for_approval", "nil_approved"] },
+};
 const normalizeTextList = (value) => {
   const rawValues = Array.isArray(value) ? value : value ? [value] : [];
   const seen = new Set();
@@ -475,7 +481,7 @@ const buildCompletedTaskRows = async (employeeId) => {
   return ChecklistTask.find(
     {
       assignedEmployee: normalizedEmployeeId,
-      finalMark: { $ne: null },
+      ...scoredChecklistTaskFilter,
     },
     "taskNumber checklistName occurrenceDate completedAt status timelinessStatus finalMark"
   )
@@ -730,7 +736,7 @@ const buildDashboardSnapshot = async (user = null, access = null) => {
       {
         $match: {
           assignedEmployee: { $ne: null },
-          finalMark: { $ne: null },
+          ...scoredChecklistTaskFilter,
         },
       },
       {
@@ -1459,7 +1465,7 @@ exports.getDashboardHierarchicalMarkSummary = async (req, res) => {
                   .filter((employeeId) => Types.ObjectId.isValid(employeeId))
                   .map((employeeId) => new Types.ObjectId(employeeId)),
               },
-              finalMark: { $ne: null },
+              ...scoredChecklistTaskFilter,
             },
           },
           { $group: { _id: "$scheduleType" } },
@@ -1516,7 +1522,7 @@ exports.getDashboardHierarchicalMarkSummary = async (req, res) => {
           .filter((employeeId) => Types.ObjectId.isValid(employeeId))
           .map((employeeId) => new Types.ObjectId(employeeId)),
       },
-      finalMark: { $ne: null },
+      ...scoredChecklistTaskFilter,
     };
 
     if (fromDate || toDate) {

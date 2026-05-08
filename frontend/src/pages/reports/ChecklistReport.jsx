@@ -69,6 +69,11 @@ const getDepartmentLabel = (value) =>
   value?.departmentDisplay ||
   "-";
 
+const formatReportChecklistTaskStatus = (status) =>
+  String(status || "").trim().toLowerCase() === "approved"
+    ? "Approved"
+    : formatChecklistTaskStatus(status);
+
 const formatEmployeeOptionLabel = (employee) => {
   const employeeLabel = formatEmployeeLabel(employee);
   const departmentLabel = getDepartmentLabel(employee);
@@ -576,7 +581,7 @@ export default function ChecklistReport() {
                   </td>
                   <td>
                     <span className={`badge ${getChecklistTaskStatusBadgeClass(row.status)}`}>
-                      {formatChecklistTaskStatus(row.status)}
+                      {formatReportChecklistTaskStatus(row.status)}
                     </span>
                   </td>
                   <td>
