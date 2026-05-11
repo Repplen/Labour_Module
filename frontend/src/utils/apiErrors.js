@@ -26,7 +26,7 @@ export const formatApiErrorMessage = (error, fallbackMessage = "Request failed")
   const validationMessages = errors
     .map((row) => {
       const message = normalizeText(row?.message);
-      const fieldLabel = getFieldLabel(row?.path);
+      const fieldLabel = getFieldLabel(row?.path || row?.field);
       return message || (fieldLabel ? `${fieldLabel} is invalid` : "");
     })
     .filter(Boolean);

@@ -8,7 +8,8 @@
     "start": "node server.js",
     "test": "jest --runInBand",
     "seed": "node seed.js",
-    "backfill:checklist-marks": "node scripts/backfillChecklistMarks.js"
+    "backfill:checklist-marks": "node scripts/backfillChecklistMarks.js",
+    "check:employee-duplicates": "node scripts/reportEmployeeContactDuplicates.js"
   },
   "keywords": [],
   "author": "",

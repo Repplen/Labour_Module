@@ -59,7 +59,7 @@ const featuredShortcutOrder = [
 ];
 
 export default function RoleDashboard() {
-  const { getVisibleModules, role, can } = usePermissions();
+  const { getVisibleModules, role, can, canAny, modules } = usePermissions();
   const [welcomeSummary, setWelcomeSummary] = useState(null);
   const [dashboardStats, setDashboardStats] = useState(null);
   const visibleShortcutModules = useMemo(
@@ -67,11 +67,20 @@ export default function RoleDashboard() {
       const moduleRank = new Map(
         featuredShortcutOrder.map((moduleKey, index) => [moduleKey, index])
       );
-      const allVisibleModules = getVisibleModules().filter(
-        (moduleItem) =>
+      const allVisibleModules = [
+        ...getVisibleModules(),
+        ...(canAny([
+          { moduleKey: "dashboard_analytics", actionKey: "view" },
+          { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+        ])
+          ? (modules || []).filter((moduleItem) => moduleItem.key === "dashboard_analytics")
+          : []),
+      ].filter(
+        (moduleItem, index, rows) =>
           moduleItem.routePath &&
           moduleItem.showOnDashboard !== false &&
-          moduleItem.key !== "dashboard"
+          moduleItem.key !== "dashboard" &&
+          rows.findIndex((row) => row.key === moduleItem.key) === index
       );
       const condensedModules = allVisibleModules.filter((moduleItem) => {
         if (
@@ -107,7 +116,7 @@ export default function RoleDashboard() {
 
       return sortedModules;
     },
-    [getVisibleModules, role?.dashboardType]
+    [canAny, getVisibleModules, modules, role?.dashboardType]
   );
   const dashboardCopy = getRoleDashboardCopy(role?.dashboardType, role?.name);
 

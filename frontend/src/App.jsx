@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 import ModulePlaceholderPage from "./pages/ModulePlaceholderPage";
 import OwnTasks from "./pages/OwnTasks";
 import ChatModule from "./pages/ChatModule";
+import RoleDashboard from "./pages/RoleDashboard";
 import RolePermissionSetup from "./pages/RolePermissionSetup";
 import UsersAdmin from "./pages/UsersAdmin";
 import IntroWelcomeScreen from "./pages/IntroWelcomeScreen";
@@ -140,7 +141,7 @@ function AuthenticatedHomeRedirect() {
   );
   const resolvedHomePath = getHomePath();
   const targetPath =
-    resolvedHomePath && resolvedHomePath !== "/dashboard"
+    resolvedHomePath && (resolvedHomePath !== "/dashboard" || !firstVisibleModule)
       ? resolvedHomePath
       : firstVisibleModule?.routePath || "/access-denied";
 
@@ -218,14 +219,21 @@ function AppRoutes() {
           <Route
             path="/dashboard"
             element={
-              <AuthenticatedHomeRedirect />
+              <PermissionRoute moduleKey="dashboard">
+                <RoleDashboard />
+              </PermissionRoute>
             }
           />
 
           <Route
             path="/dashboard-1"
             element={
-              <PermissionRoute moduleKey="dashboard_analytics">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "dashboard_analytics", actionKey: "view" },
+                  { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+                ]}
+              >
                 <Dashboard
                   pageTitle="Overview 1"
                   drilldownVariant="company-site"
@@ -243,7 +251,12 @@ function AppRoutes() {
           <Route
             path="/dashboard-1/company/:companyId"
             element={
-              <PermissionRoute moduleKey="dashboard_analytics">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "dashboard_analytics", actionKey: "view" },
+                  { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+                ]}
+              >
                 <Dashboard
                   pageTitle="Overview 1"
                   drilldownVariant="company-site"
@@ -262,7 +275,12 @@ function AppRoutes() {
           <Route
             path="/dashboard-2"
             element={
-              <PermissionRoute moduleKey="dashboard_analytics">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "dashboard_analytics", actionKey: "view" },
+                  { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+                ]}
+              >
                 <Dashboard
                   pageTitle="Overview 2"
                   drilldownVariant="company-site"
@@ -283,7 +301,12 @@ function AppRoutes() {
           <Route
             path="/dashboard-2/company/:companyId"
             element={
-              <PermissionRoute moduleKey="dashboard_analytics">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "dashboard_analytics", actionKey: "view" },
+                  { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+                ]}
+              >
                 <Dashboard
                   pageTitle="Overview 2"
                   drilldownVariant="company-site"
@@ -305,7 +328,12 @@ function AppRoutes() {
           <Route
             path="/dashboard-summary"
             element={
-              <PermissionRoute moduleKey="dashboard_analytics">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "dashboard_analytics", actionKey: "view" },
+                  { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+                ]}
+              >
                 <Dashboard2Summary />
               </PermissionRoute>
             }

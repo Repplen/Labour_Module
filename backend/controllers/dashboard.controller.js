@@ -8,9 +8,9 @@ const PersonalTask = require("../models/PersonalTask");
 const Site = require("../models/Site");
 const User = require("../models/User");
 const {
-  buildChecklistMasterScopeFilter,
   isAllScope,
   resolveAccessibleEmployeeIds,
+  resolveManagedEmployeeIds,
 } = require("../services/accessScope.service");
 
 const normalizeId = (value) => String(value?._id || value || "").trim();
@@ -220,7 +220,18 @@ const getEmployeeSubDepartmentDetails = (departmentRows = [], subDepartmentRefs 
     })
     .filter(Boolean);
 
-const buildEmployeeDashboardRow = (employeeDoc, employeeMarkMap) => {
+const applyEmployeeDashboardMarkSummary = (employee, markSummary = null) => ({
+  ...employee,
+  overallMark: roundMarkValue(markSummary?.overallMark),
+  scoredChecklistCount: Number(markSummary?.scoredChecklistCount || 0),
+  targetMark: roundMarkValue(markSummary?.targetMark) ?? 0,
+  performancePercentage: calculatePerformancePercentage(
+    roundMarkValue(markSummary?.overallMark),
+    roundMarkValue(markSummary?.targetMark) ?? 0
+  ),
+});
+
+const buildEmployeeDashboardRow = (employeeDoc, employeeMarkMap = new Map()) => {
   const departmentRows = (Array.isArray(employeeDoc?.department) ? employeeDoc.department : [])
     .filter((row) => row && typeof row === "object");
   const departmentIds = normalizeIdList(
@@ -240,28 +251,23 @@ const buildEmployeeDashboardRow = (employeeDoc, employeeMarkMap) => {
     .filter(Boolean)
     .join(", ");
   const employeeId = normalizeId(employeeDoc?._id);
-  const markSummary = employeeMarkMap.get(employeeId);
   const siteIds = normalizeIdList(employeeDoc?.sites);
 
-  return {
-    _id: employeeId,
-    employeeCode: employeeDoc?.employeeCode || "",
-    employeeName: employeeDoc?.employeeName || "",
-    photo: employeeDoc?.photo || null,
-    isActive: employeeDoc?.isActive !== false,
-    siteIds,
-    departmentIds,
-    subDepartmentIds,
-    departmentDisplay,
-    subDepartmentDisplay,
-    overallMark: roundMarkValue(markSummary?.overallMark),
-    scoredChecklistCount: Number(markSummary?.scoredChecklistCount || 0),
-    targetMark: roundMarkValue(markSummary?.targetMark) ?? 0,
-    performancePercentage: calculatePerformancePercentage(
-      roundMarkValue(markSummary?.overallMark),
-      roundMarkValue(markSummary?.targetMark) ?? 0
-    ),
-  };
+  return applyEmployeeDashboardMarkSummary(
+    {
+      _id: employeeId,
+      employeeCode: employeeDoc?.employeeCode || "",
+      employeeName: employeeDoc?.employeeName || "",
+      photo: employeeDoc?.photo || null,
+      isActive: employeeDoc?.isActive !== false,
+      siteIds,
+      departmentIds,
+      subDepartmentIds,
+      departmentDisplay,
+      subDepartmentDisplay,
+    },
+    employeeMarkMap.get(employeeId)
+  );
 };
 
 const sanitizeEmployeeDashboardRow = (employee = {}) => {
@@ -474,15 +480,22 @@ const buildDepartmentLeadChoices = (departmentDocs = [], employees = []) =>
     .filter((lead) => lead.departmentCount > 0)
     .sort(sortByOverallMarkDescending);
 
-const buildCompletedTaskRows = async (employeeId) => {
+const buildCompletedTaskRows = async (employeeId, access = null, options = {}) => {
   const normalizedEmployeeId = normalizeId(employeeId);
   if (!normalizedEmployeeId) return [];
 
+  const taskFilter = await buildDashboardTaskScopeFilter(access, [], {
+    employeeIds: [normalizedEmployeeId],
+    scoredOnly: true,
+    siteIds: options.siteIds,
+  });
+
+  if (taskFilter?._id === null) {
+    return [];
+  }
+
   return ChecklistTask.find(
-    {
-      assignedEmployee: normalizedEmployeeId,
-      ...scoredChecklistTaskFilter,
-    },
+    taskFilter,
     "taskNumber checklistName occurrenceDate completedAt status timelinessStatus finalMark"
   )
     .sort({ completedAt: -1, occurrenceDate: -1 })
@@ -494,6 +507,89 @@ const getLatestDateValue = (values = []) =>
     .map((value) => (value ? new Date(value) : null))
     .filter((value) => value && !Number.isNaN(value.getTime()))
     .sort((left, right) => right.getTime() - left.getTime())[0] || null;
+
+const resolveDashboardLeadershipScope = async ({
+  user,
+  access = null,
+  companyDocs = [],
+  departmentDocs = [],
+  siteDocs = [],
+}) => {
+  const identityValues = [
+    user?.name,
+    user?.employeeName,
+    user?.employeeCode,
+    user?.email,
+    access?.principalName,
+    access?.principalEmail,
+  ];
+  const principalId = normalizeId(access?.principalId || user?.id);
+  const principalType = normalizeText(access?.principalType).toLowerCase();
+  let employee = null;
+
+  if (principalId && (principalType === "employee" || getRequesterRole(user) === "employee")) {
+    employee = await Employee.findById(
+      principalId,
+      "employeeCode employeeName email isActive"
+    ).lean();
+
+    if (employee?.isActive === false) {
+      return {
+        companyNames: [],
+        departmentIds: [],
+        employeeIds: [],
+        siteIds: [],
+      };
+    }
+
+    identityValues.push(employee?.employeeName, employee?.employeeCode, employee?.email);
+  }
+
+  const identitySet = buildIdentitySet(identityValues);
+  if (!identitySet.size && !employee?._id) {
+    return {
+      companyNames: [],
+      departmentIds: [],
+      employeeIds: [],
+      siteIds: [],
+    };
+  }
+
+  const companyNames = companyDocs
+    .filter((companyDoc) => matchesIdentitySet(companyDoc?.directorNames, identitySet))
+    .map((companyDoc) => normalizeText(companyDoc?.name))
+    .filter(Boolean);
+  const companyNameSet = new Set(companyNames);
+  const siteIds = siteDocs
+    .filter((siteDoc) => {
+      const companyMatch = companyNameSet.has(normalizeText(siteDoc?.companyName));
+      const siteHeadMatch =
+        matchesIdentitySet(siteDoc?.headNames, identitySet) ||
+        matchesIdentitySet(siteDoc?.siteLeadNames, identitySet);
+
+      return companyMatch || siteHeadMatch;
+    })
+    .map((siteDoc) => normalizeId(siteDoc?._id))
+    .filter(Boolean);
+  const departmentIds = departmentDocs
+    .filter(
+      (departmentDoc) =>
+        matchesIdentitySet(departmentDoc?.headNames, identitySet) ||
+        matchesIdentitySet(departmentDoc?.departmentLeadNames, identitySet)
+    )
+    .map((departmentDoc) => normalizeId(departmentDoc?._id))
+    .filter(Boolean);
+  const managedEmployeeIds = employee?._id
+    ? await resolveManagedEmployeeIds(employee._id)
+    : [];
+
+  return {
+    companyNames: [...companyNameSet],
+    departmentIds: [...new Set(departmentIds)],
+    employeeIds: [...new Set(managedEmployeeIds)],
+    siteIds: [...new Set(siteIds)],
+  };
+};
 
 const filterDashboardSnapshotForViewer = async ({
   user,
@@ -508,15 +604,48 @@ const filterDashboardSnapshotForViewer = async ({
       return { companyDocs, departmentDocs, siteDocs, employees };
     }
 
-    const accessibleEmployeeIds = await resolveAccessibleEmployeeIds(access);
+    const leadershipScope = await resolveDashboardLeadershipScope({
+      user,
+      access,
+      companyDocs,
+      departmentDocs,
+      siteDocs,
+    });
+    const accessibleEmployeeIds = [
+      ...new Set([
+        ...(await resolveAccessibleEmployeeIds(access)),
+        ...leadershipScope.employeeIds,
+      ]),
+    ];
     const accessibleEmployeeIdSet = new Set(accessibleEmployeeIds);
-    const scopedEmployees = employees.filter((employee) =>
-      accessibleEmployeeIdSet.has(normalizeId(employee?._id))
-    );
-    const scopedSiteIdSet = new Set(normalizeIdList(access?.scope?.siteIds));
-    const scopedDepartmentIdSet = new Set(normalizeIdList(access?.scope?.departmentIds));
+    const leadershipSiteIdSet = new Set(normalizeIdList(leadershipScope.siteIds));
+    const leadershipDepartmentIdSet = new Set(normalizeIdList(leadershipScope.departmentIds));
+    const scopedEmployees = employees.filter((employee) => {
+      if (accessibleEmployeeIdSet.has(normalizeId(employee?._id))) {
+        return true;
+      }
+
+      const siteMatch = (employee.siteIds || []).some((siteId) =>
+        leadershipSiteIdSet.has(siteId)
+      );
+      const departmentMatch = (employee.departmentIds || []).some((departmentId) =>
+        leadershipDepartmentIdSet.has(departmentId)
+      );
+
+      return siteMatch || departmentMatch;
+    });
+    const scopedSiteIdSet = new Set([
+      ...normalizeIdList(access?.scope?.siteIds),
+      ...normalizeIdList(leadershipScope.siteIds),
+    ]);
+    const scopedDepartmentIdSet = new Set([
+      ...normalizeIdList(access?.scope?.departmentIds),
+      ...normalizeIdList(leadershipScope.departmentIds),
+    ]);
     const scopedCompanyIdSet = new Set(normalizeIdList(access?.scope?.companyIds));
-    const scopedCompanyNameSet = new Set();
+    const scopedCompanyNameSet = new Set(
+      normalizeTextList(leadershipScope.companyNames)
+    );
 
     scopedEmployees.forEach((employee) => {
       (employee.siteIds || []).forEach((siteId) => {
@@ -564,6 +693,10 @@ const filterDashboardSnapshotForViewer = async ({
       ),
       siteDocs: scopedSiteDocs,
       employees: scopedEmployees,
+      taskSiteScopeIds: normalizeIdList([
+        ...normalizeIdList(access?.scope?.siteIds),
+        ...normalizeIdList(leadershipScope.siteIds),
+      ]),
     };
   }
 
@@ -609,6 +742,7 @@ const filterDashboardSnapshotForViewer = async ({
       ),
       siteDocs: scopedSiteDocs,
       employees: scopedEmployees,
+      taskSiteScopeIds: normalizeIdList(Array.from(scopedSiteIdSet)),
     };
   }
 
@@ -718,11 +852,12 @@ const filterDashboardSnapshotForViewer = async ({
     ),
     siteDocs: scopedSiteDocs,
     employees: scopedEmployees,
+    taskSiteScopeIds: normalizeIdList(Array.from(scopedSiteIdSet)),
   };
 };
 
 const buildDashboardSnapshot = async (user = null, access = null) => {
-  const [companyDocs, departmentDocs, siteDocs, employeeDocs, employeeMarkRows] = await Promise.all([
+  const [companyDocs, departmentDocs, siteDocs, employeeDocs] = await Promise.all([
     Company.find({}, "name directorNames").sort({ name: 1 }).lean(),
     Department.find({}, "name subDepartments headNames departmentLeadNames").sort({ name: 1 }).lean(),
     Site.find({}, "companyName name headNames siteLeadNames").sort({ name: 1 }).lean(),
@@ -732,28 +867,42 @@ const buildDashboardSnapshot = async (user = null, access = null) => {
     )
       .populate("department", "name subDepartments")
       .lean(),
-    ChecklistTask.aggregate([
-      {
-        $match: {
-          assignedEmployee: { $ne: null },
-          ...scoredChecklistTaskFilter,
-        },
-      },
-      {
-        $group: {
-          _id: "$assignedEmployee",
-          overallMark: { $sum: "$finalMark" },
-          scoredChecklistCount: { $sum: 1 },
-          targetMark: {
-            $sum: {
-              $ifNull: ["$baseMark", 0],
-            },
-          },
-        },
-      },
-    ]),
   ]);
 
+  const employees = employeeDocs
+    .map((employee) => buildEmployeeDashboardRow(employee))
+    .sort(sortByOverallMarkDescending);
+  const scopedSnapshot = await filterDashboardSnapshotForViewer({
+    user,
+    access,
+    companyDocs,
+    departmentDocs,
+    siteDocs,
+    employees,
+  });
+  const markTaskFilter = await buildDashboardTaskScopeFilter(
+    access,
+    scopedSnapshot.employees,
+    { scoredOnly: true, siteIds: scopedSnapshot.taskSiteScopeIds }
+  );
+  const employeeMarkRows =
+    markTaskFilter?._id === null
+      ? []
+      : await ChecklistTask.aggregate([
+          { $match: markTaskFilter },
+          {
+            $group: {
+              _id: "$assignedEmployee",
+              overallMark: { $sum: "$finalMark" },
+              scoredChecklistCount: { $sum: 1 },
+              targetMark: {
+                $sum: {
+                  $ifNull: ["$baseMark", 0],
+                },
+              },
+            },
+          },
+        ]);
   const employeeMarkMap = new Map(
     employeeMarkRows.map((row) => [
       normalizeId(row?._id),
@@ -764,18 +913,11 @@ const buildDashboardSnapshot = async (user = null, access = null) => {
       },
     ])
   );
-
-  const employees = employeeDocs
-    .map((employee) => buildEmployeeDashboardRow(employee, employeeMarkMap))
+  scopedSnapshot.employees = scopedSnapshot.employees
+    .map((employee) =>
+      applyEmployeeDashboardMarkSummary(employee, employeeMarkMap.get(employee._id))
+    )
     .sort(sortByOverallMarkDescending);
-  const scopedSnapshot = await filterDashboardSnapshotForViewer({
-    user,
-    access,
-    companyDocs,
-    departmentDocs,
-    siteDocs,
-    employees,
-  });
   const departments = buildDepartmentChoices(
     scopedSnapshot.departmentDocs,
     scopedSnapshot.employees
@@ -799,43 +941,68 @@ const buildDashboardSnapshot = async (user = null, access = null) => {
     sites,
     siteDocs: scopedSnapshot.siteDocs,
     subDepartments,
+    taskSiteScopeIds: scopedSnapshot.taskSiteScopeIds || [],
   };
 };
 
-const countScopedChecklistTasks = async (access = null, scopedEmployees = []) => {
+const countScopedChecklistTasks = async (access = null, scopedEmployees = [], options = {}) => {
   if (!access || isAllScope(access)) {
     return ChecklistTask.countDocuments();
   }
 
-  const checklistFilter = await buildChecklistMasterScopeFilter(access);
-  if (checklistFilter?._id === null) {
+  const taskFilter = await buildDashboardTaskScopeFilter(access, scopedEmployees, {
+    siteIds: options.siteIds,
+  });
+  if (taskFilter?._id === null) {
     return 0;
-  }
-
-  const matchingChecklists = await Checklist.find(checklistFilter, "_id").lean();
-  const checklistIds = normalizeIdList(matchingChecklists.map((checklist) => checklist._id))
-    .filter((checklistId) => Types.ObjectId.isValid(checklistId))
-    .map((checklistId) => new Types.ObjectId(checklistId));
-
-  if (!checklistIds.length) {
-    return 0;
-  }
-
-  const scopedEmployeeIds = normalizeIdList(
-    (scopedEmployees || []).map((employee) => employee._id)
-  )
-    .filter((employeeId) => Types.ObjectId.isValid(employeeId))
-    .map((employeeId) => new Types.ObjectId(employeeId));
-
-  const taskFilter = {
-    checklist: { $in: checklistIds },
-  };
-
-  if (scopedEmployeeIds.length) {
-    taskFilter.assignedEmployee = { $in: scopedEmployeeIds };
   }
 
   return ChecklistTask.countDocuments(taskFilter);
+};
+
+const getDashboardLastUpdated = async (access = null, scopedEmployees = [], options = {}) => {
+  if (!access || isAllScope(access)) {
+    const [
+      latestEmployee,
+      latestChecklist,
+      latestChecklistTask,
+      latestDepartment,
+    ] = await Promise.all([
+      Employee.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
+      Checklist.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
+      ChecklistTask.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
+      Department.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
+    ]);
+
+    return getLatestDateValue([
+      latestEmployee?.updatedAt,
+      latestChecklist?.updatedAt,
+      latestChecklistTask?.updatedAt,
+      latestDepartment?.updatedAt,
+    ]);
+  }
+
+  const scopedEmployeeIds = toObjectIdList(
+    (scopedEmployees || []).map((employee) => employee?._id)
+  );
+  const taskFilter = await buildDashboardTaskScopeFilter(access, scopedEmployees, {
+    siteIds: options.siteIds,
+  });
+  const employeeFilter = scopedEmployeeIds.length
+    ? { _id: { $in: scopedEmployeeIds } }
+    : { _id: null };
+
+  const [latestEmployee, latestChecklistTask] = await Promise.all([
+    Employee.findOne(employeeFilter, "updatedAt").sort({ updatedAt: -1 }).lean(),
+    taskFilter?._id === null
+      ? Promise.resolve(null)
+      : ChecklistTask.findOne(taskFilter, "updatedAt").sort({ updatedAt: -1 }).lean(),
+  ]);
+
+  return getLatestDateValue([
+    latestEmployee?.updatedAt,
+    latestChecklistTask?.updatedAt,
+  ]);
 };
 
 const parseDateBoundary = (value, boundary = "start") => {
@@ -870,6 +1037,97 @@ const buildSelectOption = (id, label) => ({
   name: label,
   label,
 });
+
+const toObjectIdList = (values = []) =>
+  normalizeIdList(values)
+    .filter((value) => Types.ObjectId.isValid(value))
+    .map((value) => new Types.ObjectId(value));
+
+const getAccessScopeStrategy = (access = {}) =>
+  normalizeText(access?.scope?.strategy).toLowerCase();
+
+const resolveDashboardSiteScopeIds = async (access = {}) => {
+  if (!access || isAllScope(access) || getAccessScopeStrategy(access) === "own") {
+    return [];
+  }
+
+  let siteIds = normalizeIdList(access?.scope?.siteIds);
+  const companyIds = normalizeIdList(access?.scope?.companyIds);
+
+  if (companyIds.length) {
+    const companyDocs = await Company.find({ _id: { $in: companyIds } }, "name").lean();
+    const companyNames = [
+      ...new Set(
+        companyDocs
+          .map((companyDoc) => normalizeText(companyDoc?.name))
+          .filter(Boolean)
+      ),
+    ];
+
+    if (companyNames.length) {
+      const companySiteDocs = await Site.find(
+        { companyName: { $in: companyNames } },
+        "_id"
+      ).lean();
+      siteIds = normalizeIdList([
+        ...siteIds,
+        ...companySiteDocs.map((siteDoc) => siteDoc._id),
+      ]);
+    }
+  }
+
+  return siteIds;
+};
+
+const buildDashboardTaskScopeFilter = async (
+  access = null,
+  scopedEmployees = [],
+  { employeeIds = [], scoredOnly = false, siteIds = [] } = {}
+) => {
+  const filter = scoredOnly ? { ...scoredChecklistTaskFilter } : {};
+  const forcedEmployeeIds = normalizeIdList(employeeIds);
+
+  if (!access || isAllScope(access)) {
+    if (forcedEmployeeIds.length) {
+      const employeeObjectIds = toObjectIdList(forcedEmployeeIds);
+      if (!employeeObjectIds.length) return { _id: null };
+      filter.assignedEmployee = { $in: employeeObjectIds };
+    }
+
+    return filter;
+  }
+
+  const scopedEmployeeIds = forcedEmployeeIds.length
+    ? forcedEmployeeIds
+    : normalizeIdList((scopedEmployees || []).map((employee) => employee?._id));
+  const employeeObjectIds = toObjectIdList(scopedEmployeeIds);
+
+  if (!employeeObjectIds.length) {
+    return { _id: null };
+  }
+
+  filter.assignedEmployee = { $in: employeeObjectIds };
+
+  const siteScopeIds = normalizeIdList([
+    ...(await resolveDashboardSiteScopeIds(access)),
+    ...normalizeIdList(siteIds),
+  ]);
+  if (siteScopeIds.length) {
+    const checklistDocs = await Checklist.find(
+      { employeeAssignedSite: { $in: toObjectIdList(siteScopeIds) } },
+      "_id"
+    ).lean();
+    const checklistObjectIds = toObjectIdList(checklistDocs.map((checklistDoc) => checklistDoc._id));
+
+    if (!checklistObjectIds.length) {
+      return { _id: null };
+    }
+
+    filter.checklist = { $in: checklistObjectIds };
+  }
+
+  return filter;
+};
 
 const buildSummaryFilterEmployees = ({
   employees = [],
@@ -1088,36 +1346,53 @@ exports.getWelcomeSummary = async (req, res) => {
 
 exports.getDashboardStats = async (req, res) => {
   try {
-    const [
-      snapshot,
-      latestEmployee,
-      latestChecklist,
-      latestChecklistTask,
-      latestDepartment,
-    ] = await Promise.all([
-      buildDashboardSnapshot(req.user, req.access),
-      Employee.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
-      Checklist.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
-      ChecklistTask.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
-      Department.findOne({}, "updatedAt").sort({ updatedAt: -1 }).lean(),
-    ]);
-    const totalChecklistTasks = await countScopedChecklistTasks(req.access, snapshot.employees);
+    const snapshot = await buildDashboardSnapshot(req.user, req.access);
+    const totalChecklistTasks = await countScopedChecklistTasks(
+      req.access,
+      snapshot.employees,
+      { siteIds: snapshot.taskSiteScopeIds }
+    );
 
     const total = snapshot.employees.length;
     const active = snapshot.employees.filter((employee) => employee.isActive).length;
     const inactive = total - active;
-    const lastUpdated = getLatestDateValue([
-      latestEmployee?.updatedAt,
-      latestChecklist?.updatedAt,
-      latestChecklistTask?.updatedAt,
-      latestDepartment?.updatedAt,
-    ]);
+    const lastUpdated = await getDashboardLastUpdated(req.access, snapshot.employees, {
+      siteIds: snapshot.taskSiteScopeIds,
+    });
+    const markSummary = summarizeEmployeeMarks(snapshot.employees);
+    const taskStatusFilter = await buildDashboardTaskScopeFilter(
+      req.access,
+      snapshot.employees,
+      { siteIds: snapshot.taskSiteScopeIds }
+    );
+    const taskStatusRows =
+      taskStatusFilter?._id === null
+        ? []
+        : await ChecklistTask.aggregate([
+            { $match: taskStatusFilter },
+            { $group: { _id: "$status", count: { $sum: 1 } } },
+          ]);
+    const taskStatusCounts = taskStatusRows.reduce((result, row) => {
+      result[normalizeText(row?._id).toLowerCase()] = Number(row?.count || 0);
+      return result;
+    }, {});
 
     return res.json({
       total,
       active,
       inactive,
       totalChecklistTasks,
+      overallMark: markSummary.overallMark,
+      targetMark: markSummary.targetMark,
+      percentage: markSummary.performancePercentage ?? 0,
+      pendingTasks:
+        Number(taskStatusCounts.open || 0) +
+        Number(taskStatusCounts.submitted || 0) +
+        Number(taskStatusCounts.nil_for_approval || 0) +
+        Number(taskStatusCounts.waiting_dependency || 0),
+      approvedTasks: Number(taskStatusCounts.approved || 0),
+      rejectedTasks: Number(taskStatusCounts.rejected || 0),
+      nilApprovedTasks: Number(taskStatusCounts.nil_approved || 0),
       lastUpdated,
       byDepartment: snapshot.departments.map((department) => ({
         _id: department._id,
@@ -1170,7 +1445,9 @@ exports.getEmployeeMarkDrilldown = async (req, res) => {
         employees.find((employee) => employee._id === selectedEmployeeId) || null;
 
       completedTasks = selectedEmployee
-        ? await buildCompletedTaskRows(selectedEmployee._id)
+        ? await buildCompletedTaskRows(selectedEmployee._id, req.access, {
+            siteIds: snapshot.taskSiteScopeIds,
+          })
         : [];
     }
 
@@ -1306,7 +1583,9 @@ exports.getCompanySiteEmployeeMarkDrilldown = async (req, res) => {
             employees.find((employee) => employee._id === selectedEmployeeId) || null;
 
           completedTasks = selectedEmployee
-            ? await buildCompletedTaskRows(selectedEmployee._id)
+            ? await buildCompletedTaskRows(selectedEmployee._id, req.access, {
+                siteIds: snapshot.taskSiteScopeIds,
+              })
             : [];
         }
       }
@@ -1456,22 +1735,21 @@ exports.getDashboardHierarchicalMarkSummary = async (req, res) => {
       )
     );
 
-    const checklistTypeRows = scopedEmployeeIds.length
-      ? await ChecklistTask.aggregate([
-          {
-            $match: {
-              assignedEmployee: {
-                $in: scopedEmployeeIds
-                  .filter((employeeId) => Types.ObjectId.isValid(employeeId))
-                  .map((employeeId) => new Types.ObjectId(employeeId)),
-              },
-              ...scoredChecklistTaskFilter,
-            },
-          },
-          { $group: { _id: "$scheduleType" } },
-          { $sort: { _id: 1 } },
-        ])
-      : [];
+    const checklistTypeFilter = scopedEmployeeIds.length
+      ? await buildDashboardTaskScopeFilter(req.access, filteredEmployees, {
+          employeeIds: scopedEmployeeIds,
+          scoredOnly: true,
+          siteIds: snapshot.taskSiteScopeIds,
+        })
+      : { _id: null };
+    const checklistTypeRows =
+      checklistTypeFilter?._id === null
+        ? []
+        : await ChecklistTask.aggregate([
+            { $match: checklistTypeFilter },
+            { $group: { _id: "$scheduleType" } },
+            { $sort: { _id: 1 } },
+          ]);
     const checklistTypes = checklistTypeRows
       .map((row) => ({
         value: normalizeText(row?._id).toLowerCase(),
@@ -1516,14 +1794,48 @@ exports.getDashboardHierarchicalMarkSummary = async (req, res) => {
       });
     }
 
-    const taskQuery = {
-      assignedEmployee: {
-        $in: scopedEmployeeIds
-          .filter((employeeId) => Types.ObjectId.isValid(employeeId))
-          .map((employeeId) => new Types.ObjectId(employeeId)),
-      },
-      ...scoredChecklistTaskFilter,
-    };
+    const taskQuery = await buildDashboardTaskScopeFilter(req.access, filteredEmployees, {
+      employeeIds: scopedEmployeeIds,
+      scoredOnly: true,
+      siteIds: snapshot.taskSiteScopeIds,
+    });
+
+    if (taskQuery?._id === null) {
+      return res.json({
+        filters: {
+          selected: selectedFilters,
+          options: {
+            companies: companyOptions,
+            sites: siteOptions,
+            departments: departmentOptions,
+            subDepartments: subDepartmentOptions,
+            employees: employeeOptions,
+          },
+          checklistTypes,
+        },
+        summary: buildHierarchicalSummaryCards({
+          totalChecklistMark: 0,
+          selectedCompany:
+            snapshot.companies.find((company) => company._id === selectedFilters.company) || null,
+          selectedSite:
+            snapshot.sites.find((site) => site._id === selectedFilters.site) || null,
+          selectedDepartment:
+            snapshot.departments.find(
+              (department) => department._id === selectedFilters.department
+            ) || null,
+          selectedSubDepartment:
+            snapshot.subDepartments.find(
+              (subDepartment) => subDepartment._id === selectedFilters.subDepartment
+            ) || null,
+          selectedEmployee:
+            snapshot.employees.find((employee) => employee._id === selectedFilters.employee) || null,
+          checklistTypeLabel:
+            checklistTypes.find((item) => item.value === selectedFilters.checklistType)?.label || "",
+          employeeCount: 0,
+        }),
+        rows: [],
+      });
+    }
 
     if (fromDate || toDate) {
       taskQuery.occurrenceDate = {};

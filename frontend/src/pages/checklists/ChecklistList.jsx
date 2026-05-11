@@ -114,6 +114,66 @@ function DeleteIcon() {
   );
 }
 
+const buildChecklistImportCompletionMessage = (responseData = {}) => {
+  const createdCount = Number(responseData?.createdCount || 0);
+  const skippedRows = Array.isArray(responseData?.skippedRows)
+    ? responseData.skippedRows
+    : [];
+  const failedRows = Array.isArray(responseData?.failedRows)
+    ? responseData.failedRows
+    : Array.isArray(responseData?.failures)
+    ? responseData.failures
+    : [];
+  const failedCount = Number(responseData?.failedCount || 0);
+  const skippedCount = Number(responseData?.skippedCount ?? skippedRows.length);
+  const ignoredRows = Number(responseData?.ignoredRows || 0);
+  const generatedTaskCount = Number(responseData?.generatedTaskCount || 0);
+  const schedulerSkipped = responseData?.schedulerSkipped === true;
+  const skippedDetails = skippedRows
+    .map((row) => {
+      const message = row.message || "Checklist already exists";
+      return `Row ${row.rowNumber}: ${message}`;
+    })
+    .join("\n");
+  const failedDetails = failedRows
+    .map((row) => `Row ${row.rowNumber}: ${row.message}`)
+    .join("\n");
+  const ignoredRowsMessage = ignoredRows
+    ? `(${ignoredRows} template or empty row${ignoredRows === 1 ? "" : "s"} ignored)`
+    : "";
+  const alertLines = [
+    "Import completed.",
+    "",
+    `${createdCount} checklist master${createdCount === 1 ? "" : "s"} created.`,
+    `${generatedTaskCount} generated task${generatedTaskCount === 1 ? "" : "s"} created.`,
+    "",
+    "Summary:",
+    `- ${skippedCount} row${skippedCount === 1 ? "" : "s"} skipped (already exist)`,
+    `- ${failedCount} row${failedCount === 1 ? "" : "s"} failed`,
+  ];
+
+  if (schedulerSkipped) {
+    alertLines.push(
+      "",
+      "Task generation was already running. New checklist tasks will be picked up by the scheduler."
+    );
+  }
+
+  if (ignoredRowsMessage) {
+    alertLines.push("", ignoredRowsMessage);
+  }
+
+  if (skippedDetails) {
+    alertLines.push("", "Skipped rows:", skippedDetails);
+  }
+
+  if (failedDetails) {
+    alertLines.push("", "Failed rows:", failedDetails);
+  }
+
+  return alertLines.join("\n");
+};
+
 export default function ChecklistList() {
   const { can } = usePermissions();
   const canManageChecklistMasters = can("checklist_master", "view");
@@ -135,6 +195,9 @@ export default function ChecklistList() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
+  const [pendingImportFile, setPendingImportFile] = useState(null);
   const [statusConfirmation, setStatusConfirmation] = useState(null);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -357,7 +420,7 @@ export default function ChecklistList() {
   };
 
   const openChecklistImportPicker = () => {
-    if (importLoading) return;
+    if (importLoading || importSaving || importPreview) return;
     importInputRef.current?.click();
   };
 
@@ -377,7 +440,10 @@ export default function ChecklistList() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", "preview");
     setImportLoading(true);
+    setImportPreview(null);
+    setPendingImportFile(file);
 
     try {
       const response = await api.post("/checklists/import/excel", formData, {
@@ -386,70 +452,52 @@ export default function ChecklistList() {
         },
       });
 
-      const createdCount = Number(response.data?.createdCount || 0);
-      const skippedRows = Array.isArray(response.data?.skippedRows)
-        ? response.data.skippedRows
-        : [];
-      const failedRows = Array.isArray(response.data?.failedRows)
-        ? response.data.failedRows
-        : Array.isArray(response.data?.failures)
-        ? response.data.failures
-        : [];
-      const failedCount = Number(response.data?.failedCount || 0);
-      const skippedCount = Number(response.data?.skippedCount ?? skippedRows.length);
-      const ignoredRows = Number(response.data?.ignoredRows || 0);
-      const generatedTaskCount = Number(response.data?.generatedTaskCount || 0);
-      const schedulerSkipped = response.data?.schedulerSkipped === true;
-      const skippedDetails = skippedRows
-        .map((row) => {
-          const message = row.message || "Checklist already exists";
-          return `Row ${row.rowNumber}: ${message}`;
-        })
-        .join("\n");
-      const failedDetails = failedRows
-        .map((row) => `Row ${row.rowNumber}: ${row.message}`)
-        .join("\n");
-      const ignoredRowsMessage = ignoredRows
-        ? `(${ignoredRows} template or empty row${ignoredRows === 1 ? "" : "s"} ignored)`
-        : "";
-      const alertLines = [
-        "Import completed.",
-        "",
-        `${createdCount} checklist master${createdCount === 1 ? "" : "s"} created.`,
-        `${generatedTaskCount} generated task${generatedTaskCount === 1 ? "" : "s"} created.`,
-        "",
-        "Summary:",
-        `• ${skippedCount} row${skippedCount === 1 ? "" : "s"} skipped (already exist)`,
-        `• ${failedCount} row${failedCount === 1 ? "" : "s"} failed`,
-      ];
-
-      if (schedulerSkipped) {
-        alertLines.push(
-          "",
-          "Task generation was already running. New checklist tasks will be picked up by the scheduler."
-        );
-      }
-
-      if (ignoredRowsMessage) {
-        alertLines.push("", ignoredRowsMessage);
-      }
-
-      if (skippedDetails) {
-        alertLines.push("", "Skipped rows:", skippedDetails);
-      }
-
-      if (failedDetails) {
-        alertLines.push("", "Failed rows:", failedDetails);
-      }
-
-      alert(alertLines.join("\n"));
-
-      setReloadToken((currentValue) => currentValue + 1);
+      setImportPreview({
+        ...(response.data || {}),
+        fileName: file.name,
+      });
     } catch (err) {
       console.error("Checklist import failed:", err);
+      setPendingImportFile(null);
       alert(err.response?.data?.message || "Failed to import checklist masters");
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const cancelChecklistImportPreview = () => {
+    if (importSaving) return;
+    setImportPreview(null);
+    setPendingImportFile(null);
+  };
+
+  const confirmChecklistImportPreview = async () => {
+    if (!pendingImportFile) {
+      setImportPreview(null);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", pendingImportFile);
+    formData.append("mode", "commit");
+    setImportSaving(true);
+
+    try {
+      const response = await api.post("/checklists/import/excel", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setImportPreview(null);
+      setPendingImportFile(null);
+      alert(buildChecklistImportCompletionMessage(response.data));
+      setReloadToken((currentValue) => currentValue + 1);
+    } catch (err) {
+      console.error("Checklist import save failed:", err);
+      alert(err.response?.data?.message || "Failed to import checklist masters");
+    } finally {
+      setImportSaving(false);
     }
   };
 
@@ -490,7 +538,7 @@ export default function ChecklistList() {
         exportChecklistExcel={exportChecklistExcel}
         exportLoading={exportLoading}
         openChecklistImportPicker={openChecklistImportPicker}
-        importLoading={importLoading}
+        importLoading={importLoading || importSaving}
         canDelete={canDeleteChecklistMaster}
         canCreate={canCreateChecklistMaster}
         canEdit={canEditChecklistMaster}
@@ -507,6 +555,14 @@ export default function ChecklistList() {
           error={statusError}
           onCancel={closeChecklistStatusConfirmation}
           onConfirm={confirmChecklistStatusChange}
+        />
+      ) : null}
+      {importPreview ? (
+        <ChecklistImportPreviewModal
+          preview={importPreview}
+          saving={importSaving}
+          onCancel={cancelChecklistImportPreview}
+          onConfirm={confirmChecklistImportPreview}
         />
       ) : null}
     </>
@@ -960,6 +1016,165 @@ function ChecklistStatusConfirmationModal({ checklist, saving, error, onCancel, 
                 : isDeactivation
                 ? "Yes, Deactivate"
                 : "Yes, Activate"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistImportPreviewModal({ preview, saving, onCancel, onConfirm }) {
+  const readyRows = Array.isArray(preview?.readyRows) ? preview.readyRows : [];
+  const skippedRows = Array.isArray(preview?.skippedRows) ? preview.skippedRows : [];
+  const failedRows = Array.isArray(preview?.failedRows)
+    ? preview.failedRows
+    : Array.isArray(preview?.failures)
+    ? preview.failures
+    : [];
+  const readyCount = Number(preview?.readyCount ?? readyRows.length);
+  const skippedCount = Number(preview?.skippedCount ?? skippedRows.length);
+  const failedCount = Number(preview?.failedCount ?? failedRows.length);
+  const processedCount = Number(preview?.processedCount || 0);
+  const ignoredRows = Number(preview?.ignoredRows || 0);
+  const canConfirm = readyCount > 0 && !saving;
+  const displayedReadyRows = readyRows.slice(0, 8);
+  const remainingReadyRows = Math.max(0, readyRows.length - displayedReadyRows.length);
+
+  return (
+    <div
+      className="modal fade show d-block app-modal-overlay"
+      data-testid="checklist-import-preview-modal"
+      tabIndex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checklist-import-preview-title"
+    >
+      <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-content">
+          <div className="modal-header">
+            <div>
+              <h5 className="modal-title mb-1" id="checklist-import-preview-title">
+                Preview Checklist Import
+              </h5>
+              <div className="text-muted small">
+                {preview?.fileName || "Selected Excel file"} has not been saved yet.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Close"
+              onClick={onCancel}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="modal-body">
+            <div className="alert alert-info py-2" role="status">
+              Review the summary. Click OK to save checklist data, or Cancel to reject this import.
+            </div>
+
+            <div className="list-summary mb-3">
+              <span className="summary-chip">{processedCount} processed</span>
+              <span className="summary-chip summary-chip--neutral">{readyCount} ready</span>
+              <span className="summary-chip summary-chip--neutral">{skippedCount} skipped</span>
+              <span className="summary-chip summary-chip--neutral">{failedCount} failed</span>
+              <span className="summary-chip summary-chip--neutral">{ignoredRows} ignored</span>
+            </div>
+
+            {readyCount > 0 ? (
+              <div className="table-responsive mb-3">
+                <table className="table table-sm table-bordered align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Row</th>
+                      <th>Checklist Number</th>
+                      <th>Name</th>
+                      <th>Assigned Site</th>
+                      <th>Employee</th>
+                      <th>Schedule</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedReadyRows.map((row) => (
+                      <tr key={`${row.rowNumber}-${row.checklistName}`}>
+                        <td>{row.rowNumber}</td>
+                        <td>{row.checklistNumber || "Auto number"}</td>
+                        <td className="fw-semibold">{row.checklistName || "-"}</td>
+                        <td>{row.assignedSite || "-"}</td>
+                        <td>{row.assignedEmployee || "-"}</td>
+                        <td>
+                          {row.scheduleType || "-"}
+                          <div className="small text-muted">
+                            {row.startDate || "-"} {row.startTime || ""} to{" "}
+                            {row.endDate || "-"} {row.endTime || ""}
+                          </div>
+                        </td>
+                        <td>{row.status || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {remainingReadyRows ? (
+                  <div className="form-help mt-2">
+                    {remainingReadyRows} more ready row
+                    {remainingReadyRows === 1 ? "" : "s"} will be imported.
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="alert alert-warning py-2">
+                No checklist rows are ready to import from this file.
+              </div>
+            )}
+
+            {skippedRows.length ? (
+              <div className="mb-3">
+                <h6 className="mb-2">Skipped Rows</h6>
+                <ul className="mb-0">
+                  {skippedRows.slice(0, 6).map((row) => (
+                    <li key={`skipped-${row.rowNumber}`}>
+                      Row {row.rowNumber}: {row.message || "Checklist already exists"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {failedRows.length ? (
+              <div className="alert alert-warning mb-0">
+                <h6 className="mb-2">Failed Rows</h6>
+                <ul className="mb-0">
+                  {failedRows.slice(0, 6).map((row) => (
+                    <li key={`failed-${row.rowNumber}`}>
+                      Row {row.rowNumber}: {row.message || "Failed to import row"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              data-testid="checklist-import-cancel"
+              onClick={onCancel}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="checklist-import-ok"
+              onClick={onConfirm}
+              disabled={!canConfirm}
+            >
+              {saving ? "Saving..." : "OK"}
             </button>
           </div>
         </div>

@@ -7,6 +7,10 @@ import {
   IMAGE_FILE_OPTIONS,
   validateFile,
 } from "../utils/fileValidation";
+import {
+  getApiDuplicateEmployeeErrors,
+  getEmployeeDuplicateErrors,
+} from "../utils/employeeDuplicateValidation";
 import { formatApiErrorMessage } from "../utils/apiErrors";
 import { formatSiteLabel } from "../utils/siteDisplay";
 
@@ -89,9 +93,11 @@ export default function EmployeeForm() {
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [sitesList, setSitesList] = useState([]);
+  const [employeeRows, setEmployeeRows] = useState([]);
   const [superiorEmployees, setSuperiorEmployees] = useState([]);
   const [subDepartments, setSubDepartments] = useState([]);
   const [subSiteOptions, setSubSiteOptions] = useState([]);
+  const [serverDuplicateErrors, setServerDuplicateErrors] = useState({});
 
   const [form, setForm] = useState({
     employeeCode: "",
@@ -148,6 +154,22 @@ export default function EmployeeForm() {
       })),
     [subSiteOptions]
   );
+  const clientDuplicateErrors = useMemo(
+    () =>
+      getEmployeeDuplicateErrors(employeeRows, {
+        email: form.email,
+        mobile: form.mobile,
+      }),
+    [employeeRows, form.email, form.mobile]
+  );
+  const duplicateErrors = useMemo(
+    () => ({
+      email: clientDuplicateErrors.email || serverDuplicateErrors.email || "",
+      mobile: clientDuplicateErrors.mobile || serverDuplicateErrors.mobile || "",
+    }),
+    [clientDuplicateErrors, serverDuplicateErrors]
+  );
+  const hasDuplicateErrors = Boolean(duplicateErrors.email || duplicateErrors.mobile);
 
   const loadMasters = async () => {
     try {
@@ -161,6 +183,7 @@ export default function EmployeeForm() {
       setDepartments(deptRes.data || []);
       setDesignations(desigRes.data || []);
       setSitesList(siteRes.data || []);
+      setEmployeeRows(employeeRes.data || []);
       setSuperiorEmployees(employeeRes.data || []);
     } catch (err) {
       console.error("Failed to load masters", err);
@@ -171,6 +194,15 @@ export default function EmployeeForm() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "email" || name === "mobile") {
+      setServerDuplicateErrors((prev) => {
+        if (!prev[name]) return prev;
+        const nextErrors = { ...prev };
+        delete nextErrors[name];
+        return nextErrors;
+      });
+    }
   };
 
   const handleDepartmentsChange = (selectedDepartmentIds) => {
@@ -239,7 +271,12 @@ export default function EmployeeForm() {
       return;
     }
 
+    if (hasDuplicateErrors) {
+      return;
+    }
+
     setLoading(true);
+    setServerDuplicateErrors({});
 
     try {
       const data = new FormData();
@@ -270,6 +307,13 @@ export default function EmployeeForm() {
       navigate("/employees");
     } catch (err) {
       console.error(err);
+      const apiDuplicateErrors = getApiDuplicateEmployeeErrors(err);
+
+      if (apiDuplicateErrors.email || apiDuplicateErrors.mobile) {
+        setServerDuplicateErrors(apiDuplicateErrors);
+        return;
+      }
+
       alert(formatApiErrorMessage(err, "Save failed"));
     } finally {
       setLoading(false);
@@ -337,12 +381,24 @@ export default function EmployeeForm() {
                 <div className="col-md-6">
                   <label className="form-label">Mobile</label>
                   <input
-                    className="form-control"
+                    className={`form-control${duplicateErrors.mobile ? " is-invalid" : ""}`}
                     name="mobile"
                     placeholder="Mobile"
                     value={form.mobile}
                     onChange={handleChange}
+                    aria-invalid={duplicateErrors.mobile ? "true" : "false"}
+                    aria-describedby={
+                      duplicateErrors.mobile ? "employee-mobile-duplicate-error" : undefined
+                    }
                   />
+                  {duplicateErrors.mobile ? (
+                    <div
+                      className="invalid-feedback d-block"
+                      id="employee-mobile-duplicate-error"
+                    >
+                      {duplicateErrors.mobile}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="col-md-6">
@@ -357,14 +413,28 @@ export default function EmployeeForm() {
                 </div>
               </div>
 
-              <label className="form-label mt-3">Email</label>
-              <input
-                className="form-control mb-3"
-                name="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={handleChange}
-              />
+              <div className="mb-3">
+                <label className="form-label mt-3">Email</label>
+                <input
+                  className={`form-control${duplicateErrors.email ? " is-invalid" : ""}`}
+                  name="email"
+                  placeholder="Email"
+                  value={form.email}
+                  onChange={handleChange}
+                  aria-invalid={duplicateErrors.email ? "true" : "false"}
+                  aria-describedby={
+                    duplicateErrors.email ? "employee-email-duplicate-error" : undefined
+                  }
+                />
+                {duplicateErrors.email ? (
+                  <div
+                    className="invalid-feedback d-block"
+                    id="employee-email-duplicate-error"
+                  >
+                    {duplicateErrors.email}
+                  </div>
+                ) : null}
+              </div>
 
               <label className="form-label">Login Password *</label>
               <input
@@ -530,7 +600,11 @@ export default function EmployeeForm() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-success" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-success"
+              disabled={loading || hasDuplicateErrors}
+            >
               {loading ? "Saving..." : "Save Employee"}
             </button>
           </div>

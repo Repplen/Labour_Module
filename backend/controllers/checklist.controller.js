@@ -8,6 +8,7 @@ const Department = require("../models/Department");
 const Employee = require("../models/Employee");
 const Site = require("../models/Site");
 const User = require("../models/User");
+const { Types } = require("mongoose");
 const {
   buildChecklistMasterScopeFilter,
   buildDepartmentScopeFilter,
@@ -1988,6 +1989,34 @@ const buildChecklistImportDuplicateSignature = (checklist = {}) =>
     status: checklist.status !== false,
   });
 
+const getChecklistImportMode = (req) =>
+  normalizeText(req.body?.mode || req.query?.mode || req.body?.action || req.query?.action)
+    .toLowerCase();
+
+const isChecklistImportPreviewMode = (req) =>
+  ["preview", "dry-run", "dry_run"].includes(getChecklistImportMode(req));
+
+const buildChecklistImportPreviewRow = ({
+  rowNumber,
+  checklistNumber = "",
+  payload = {},
+  assignedSite = null,
+  assignedEmployee = null,
+  status = true,
+}) => ({
+  rowNumber,
+  checklistNumber: normalizeText(checklistNumber) || "Auto number",
+  checklistName: normalizeText(payload.checklistName),
+  assignedSite: formatSiteDisplayName(assignedSite) || normalizeText(assignedSite?.name),
+  assignedEmployee: formatEmployeeDisplayName(assignedEmployee),
+  scheduleType: capitalizeLabel(payload.scheduleType),
+  startDate: formatExcelDateDisplay(payload.startDate),
+  startTime: normalizeText(payload.scheduleTime),
+  endDate: formatExcelDateDisplay(payload.endDate),
+  endTime: normalizeText(payload.endTime),
+  status: status ? "Active" : "Inactive",
+});
+
 const getWorksheetOrDefault = (workbook) =>
   workbook.getWorksheet(CHECKLIST_EXCEL_SHEET_NAME) || workbook.worksheets[0] || null;
 
@@ -3906,6 +3935,7 @@ exports.importChecklistsExcel = async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
+    const previewMode = isChecklistImportPreviewMode(req);
 
     const worksheet = getWorksheetOrDefault(workbook);
     if (!worksheet) {
@@ -3995,6 +4025,7 @@ exports.importChecklistsExcel = async (req, res) => {
     const defaultSite = restrictedSiteId && sites.length === 1 ? sites[0] : null;
     const failedRows = [];
     const skippedRows = [];
+    const readyRows = [];
     const createdChecklistIds = [];
     let processedCount = 0;
     let ignoredRows = 0;
@@ -4225,6 +4256,7 @@ exports.importChecklistsExcel = async (req, res) => {
       const validationResult = await validateChecklistPayload({
         body: importPayload,
         requesterSiteId: restrictedSiteId,
+        dependencyChecklistOverride: isDependentTask ? dependencyChecklist : null,
       });
 
       if (validationResult.message) {
@@ -4256,6 +4288,40 @@ exports.importChecklistsExcel = async (req, res) => {
           message: existingChecklistNumber
             ? `Checklist "${existingChecklistNumber}" already has the same task details`
             : "A checklist with the same task details already exists",
+        });
+        continue;
+      }
+
+      if (previewMode) {
+        const previewChecklistId = new Types.ObjectId();
+        const previewChecklistNumber = normalizeText(validationResult.payload.checklistNumber);
+
+        readyRows.push(
+          buildChecklistImportPreviewRow({
+            rowNumber,
+            checklistNumber:
+              checklistNumber && !existingChecklistForNumber ? previewChecklistNumber : "",
+            payload: validationResult.payload,
+            assignedSite,
+            assignedEmployee,
+            status,
+          })
+        );
+
+        if (previewChecklistNumber) {
+          checklistLookup.set(normalizeLookupKey(previewChecklistNumber), {
+            _id: previewChecklistId,
+            checklistNumber: previewChecklistNumber,
+            checklistName: validationResult.payload.checklistName,
+            employeeAssignedSite: validationResult.payload.employeeAssignedSite,
+          });
+        }
+
+        checklistDuplicateLookup.set(duplicateSignature, {
+          ...validationResult.payload,
+          _id: previewChecklistId,
+          checklistNumber: previewChecklistNumber,
+          status,
         });
         continue;
       }
@@ -4306,6 +4372,25 @@ exports.importChecklistsExcel = async (req, res) => {
 
     if (!processedCount) {
       return res.status(400).json({ message: "No checklist rows found in the Excel file" });
+    }
+
+    if (previewMode) {
+      return res.json({
+        message: "Checklist import preview ready",
+        preview: true,
+        processedCount,
+        readyCount: readyRows.length,
+        createdCount: 0,
+        generatedTaskCount: 0,
+        schedulerSkipped: false,
+        skippedCount: skippedRows.length,
+        failedCount: failedRows.length,
+        ignoredRows,
+        readyRows,
+        skippedRows,
+        failedRows,
+        failures: failedRows,
+      });
     }
 
     const schedulerResult = createdChecklistIds.length

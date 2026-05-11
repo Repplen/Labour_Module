@@ -1584,7 +1584,11 @@ const getNextChecklistNumberValue = async (siteId) => {
   return `${prefix} - ${String(maxSequence + 1).padStart(3, "0")}`;
 };
 
-const validateChecklistPayload = async ({ body, requesterSiteId = "" }) => {
+const validateChecklistPayload = async ({
+  body,
+  requesterSiteId = "",
+  dependencyChecklistOverride = null,
+}) => {
   const currentChecklistId = normalizeText(body.currentChecklistId || body._id || body.id);
   const checklistName = normalizeText(body.checklistName);
   const enableMark =
@@ -1743,12 +1747,21 @@ const validateChecklistPayload = async ({ body, requesterSiteId = "" }) => {
     return { message: "Selected checklist source site is invalid", status: 400 };
   }
 
+  const dependencyChecklistOverrideId = normalizeText(dependencyChecklistOverride?._id);
+  const canUseDependencyChecklistOverride =
+    isDependentTask &&
+    dependencyChecklistOverride &&
+    dependencyChecklistOverrideId &&
+    dependencyChecklistOverrideId === dependencyChecklistId;
+
   const [assignedSite, sourceSite, dependencyChecklist] = await Promise.all([
     Site.findById(employeeAssignedSite, "name companyName").lean(),
     checklistSourceSite
       ? Site.findById(checklistSourceSite, "name companyName").lean()
       : Promise.resolve(null),
-    isDependentTask
+    canUseDependencyChecklistOverride
+      ? Promise.resolve(dependencyChecklistOverride)
+      : isDependentTask
       ? Checklist.findById(
           dependencyChecklistId,
           "checklistNumber checklistName employeeAssignedSite"

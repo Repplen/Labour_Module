@@ -262,13 +262,22 @@ export default function Navbar() {
   const reportLinks = useMemo(
     () =>
       [
-        can("dashboard_analytics", "view")
+        canAny([
+          { moduleKey: "dashboard_analytics", actionKey: "view" },
+          { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+        ])
           ? { to: "/dashboard-1", label: "Overview 1" }
           : null,
-        can("dashboard_analytics", "view")
+        canAny([
+          { moduleKey: "dashboard_analytics", actionKey: "view" },
+          { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+        ])
           ? { to: "/dashboard-2", label: "Overview 2" }
           : null,
-        can("dashboard_analytics", "view")
+        canAny([
+          { moduleKey: "dashboard_analytics", actionKey: "view" },
+          { moduleKey: "dashboard_analytics", actionKey: "report_view" },
+        ])
           ? { to: "/dashboard-summary", label: "Summary" }
           : null,
         canAny([

@@ -1,4 +1,8 @@
 const mongoose = require("mongoose");
+const {
+  normalizeEmployeeEmail,
+  normalizeEmployeeMobile,
+} = require("../utils/employeeContactNormalization");
 
 const employeeSubSiteSchema = new mongoose.Schema(
   {
@@ -31,7 +35,8 @@ const employeeSchema = new mongoose.Schema(
 
     email: {
       type: String,
-      trim: true
+      trim: true,
+      set: normalizeEmployeeEmail
     },
 
     password: {
@@ -42,7 +47,8 @@ const employeeSchema = new mongoose.Schema(
 
     mobile: {
       type: String,
-      trim: true
+      trim: true,
+      set: normalizeEmployeeMobile
     },
 
     /* ✅ DATE OF JOINING (FIX) */
@@ -158,6 +164,27 @@ const employeeSchema = new mongoose.Schema(
   },
   {
     timestamps: true
+  }
+);
+
+employeeSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    collation: { locale: "en", strength: 2 },
+    partialFilterExpression: {
+      email: { $type: "string", $gt: "" }
+    }
+  }
+);
+
+employeeSchema.index(
+  { mobile: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      mobile: { $type: "string", $gt: "" }
+    }
   }
 );
 

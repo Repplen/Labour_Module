@@ -10,9 +10,18 @@ const {
   isAllScope,
   resolveAccessibleEmployeeIds,
 } = require("../services/accessScope.service");
+const {
+  normalizeEmployeeEmail,
+  normalizeEmployeeMobile,
+} = require("../utils/employeeContactNormalization");
 
 const normalizeSites = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
+const duplicateEmployeeMessage = "Duplicate employee data found";
+const duplicateEmployeeFieldMessages = {
+  email: "This email ID already exists.",
+  mobile: "This mobile number already exists.",
+};
 const qrFieldKeys = ["qrToken", "qrCodeUrl", "qrGeneratedAt", "qrEnabled"];
 const stripQrFields = (value = {}) => {
   const nextValue = { ...value };
@@ -38,6 +47,99 @@ const normalizeIdList = (value) => {
 
 const normalizeDocumentList = (value) =>
   (Array.isArray(value) ? value : value ? [value] : []).filter(Boolean);
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildExactEmailRegex = (email) => new RegExp(`^${escapeRegExp(email)}$`, "i");
+
+const buildWhitespaceAgnosticMobileRegex = (mobile) =>
+  new RegExp(`^\\s*${[...mobile].map(escapeRegExp).join("\\s*")}\\s*$`);
+
+const buildDuplicateEmployeeError = (field) => ({
+  field,
+  message: duplicateEmployeeFieldMessages[field],
+});
+
+const sendDuplicateEmployeeResponse = (res, errors) =>
+  res.status(409).json({
+    success: false,
+    message: duplicateEmployeeMessage,
+    errors,
+  });
+
+const getDuplicateKeyEmployeeErrors = (error) => {
+  if (error?.code !== 11000) return [];
+
+  const duplicateFields = new Set([
+    ...Object.keys(error.keyPattern || {}),
+    ...Object.keys(error.keyValue || {}),
+  ]);
+
+  return ["email", "mobile"]
+    .filter((field) => duplicateFields.has(field))
+    .map(buildDuplicateEmployeeError);
+};
+
+const findDuplicateEmployeeErrors = async (employeeData = {}, currentEmployeeId = null) => {
+  const email = normalizeEmployeeEmail(employeeData.email);
+  const mobile = normalizeEmployeeMobile(employeeData.mobile);
+  const duplicateFilters = [];
+
+  if (email) {
+    duplicateFilters.push({ email: { $regex: buildExactEmailRegex(email) } });
+  }
+
+  if (mobile) {
+    duplicateFilters.push({ mobile: { $regex: buildWhitespaceAgnosticMobileRegex(mobile) } });
+  }
+
+  if (!duplicateFilters.length) {
+    return {
+      errors: [],
+      normalizedValues: { email, mobile },
+    };
+  }
+
+  const filter = { $or: duplicateFilters };
+
+  if (currentEmployeeId) {
+    filter._id = { $ne: currentEmployeeId };
+  }
+
+  const duplicateRows = await Employee.find(filter, "email mobile").lean();
+  const errors = [];
+
+  if (
+    email &&
+    duplicateRows.some((employee) => normalizeEmployeeEmail(employee.email) === email)
+  ) {
+    errors.push(buildDuplicateEmployeeError("email"));
+  }
+
+  if (
+    mobile &&
+    duplicateRows.some((employee) => normalizeEmployeeMobile(employee.mobile) === mobile)
+  ) {
+    errors.push(buildDuplicateEmployeeError("mobile"));
+  }
+
+  return {
+    errors,
+    normalizedValues: { email, mobile },
+  };
+};
+
+const applyNormalizedEmployeeContactFields = (target, normalizedValues = {}) => {
+  if (Object.prototype.hasOwnProperty.call(target, "email")) {
+    target.email = normalizedValues.email || undefined;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(target, "mobile")) {
+    target.mobile = normalizedValues.mobile || undefined;
+  }
+
+  return target;
+};
 
 const isSubDepartmentMatch = (row, subDepartmentRef) =>
   String(row?._id) === String(subDepartmentRef) ||
@@ -561,6 +663,14 @@ exports.createEmployee = async (req, res) => {
         .json({ message: "Employee login password must be at least 6 characters" });
     }
 
+    const duplicateCheck = await findDuplicateEmployeeErrors(req.body);
+
+    if (duplicateCheck.errors.length) {
+      return sendDuplicateEmployeeResponse(res, duplicateCheck.errors);
+    }
+
+    applyNormalizedEmployeeContactFields(safeBody, duplicateCheck.normalizedValues);
+
     const sites = normalizeSites(req.body.sites);
     const departmentSelection = await validateDepartmentAndSubDepartment(
       req.body.department,
@@ -589,6 +699,12 @@ exports.createEmployee = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Create employee error:", err);
+    const duplicateKeyErrors = getDuplicateKeyEmployeeErrors(err);
+
+    if (duplicateKeyErrors.length) {
+      return sendDuplicateEmployeeResponse(res, duplicateKeyErrors);
+    }
+
     res
       .status(err.status || 500)
       .json({ message: err.message || "Failed to create employee" });
@@ -598,6 +714,12 @@ exports.createEmployee = async (req, res) => {
 exports.updateEmployee = async (req, res) => {
   try {
     const rawPassword = String(req.body.password || "").trim();
+    const duplicateCheck = await findDuplicateEmployeeErrors(req.body, req.params.id);
+
+    if (duplicateCheck.errors.length) {
+      return sendDuplicateEmployeeResponse(res, duplicateCheck.errors);
+    }
+
     const sites = normalizeSites(req.body.sites);
     const departmentSelection = await validateDepartmentAndSubDepartment(
       req.body.department,
@@ -621,6 +743,7 @@ exports.updateEmployee = async (req, res) => {
       subDepartment: departmentSelection.subDepartment,
       sites,
     };
+    applyNormalizedEmployeeContactFields(data, duplicateCheck.normalizedValues);
 
     delete data.password;
 
@@ -650,6 +773,12 @@ exports.updateEmployee = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Update employee error:", err);
+    const duplicateKeyErrors = getDuplicateKeyEmployeeErrors(err);
+
+    if (duplicateKeyErrors.length) {
+      return sendDuplicateEmployeeResponse(res, duplicateKeyErrors);
+    }
+
     res
       .status(err.status || 500)
       .json({ message: err.message || "Failed to update employee" });

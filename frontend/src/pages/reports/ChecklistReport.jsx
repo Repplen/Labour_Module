@@ -135,14 +135,21 @@ export default function ChecklistReport() {
           .trim()
           .toLowerCase();
         const nextOwnEmployeeId = String(response.data?.currentPrincipalEmployeeId || "");
+        const hasEmployeeScopeBeyondOwn =
+          Boolean(nextOwnEmployeeId) &&
+          nextEmployees.some((employee) => String(employee?._id || "") !== nextOwnEmployeeId);
+        const effectiveScopeStrategy =
+          nextScopeStrategy === "own" && hasEmployeeScopeBeyondOwn
+            ? "mapped"
+            : nextScopeStrategy;
 
         setEmployees(nextEmployees);
         setDepartments(nextDepartments);
         setSites(nextSites);
-        setReportScopeStrategy(nextScopeStrategy);
+        setReportScopeStrategy(effectiveScopeStrategy);
         setOwnEmployeeId(nextOwnEmployeeId);
 
-        if (nextScopeStrategy === "own" && nextOwnEmployeeId) {
+        if (effectiveScopeStrategy === "own" && nextOwnEmployeeId) {
           const ownFilters = buildDefaultFilters(nextOwnEmployeeId);
           setFilters(ownFilters);
           setAppliedFilters(ownFilters);
