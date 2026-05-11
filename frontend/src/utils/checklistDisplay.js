@@ -76,6 +76,80 @@ const getIndiaDayDifference = (leftValue, rightValue) => {
 export const getTaskTargetDateTime = (value = {}) =>
   value?.dependencyTargetDateTime || value?.targetDateTime || value?.endDateTime || null;
 
+export const getTaskTimeStatusSummary = (task = {}) => {
+  const targetDateTime = getTaskTargetDateTime(task);
+  const submittedAt = task?.submittedAt;
+
+  if (!submittedAt) {
+    return { status: "pending", dayCount: 0 };
+  }
+
+  if (!targetDateTime) {
+    const fallbackStatus = normalizeTimingStatus(
+      task?.submissionTimingStatus || task?.timelinessStatus
+    );
+
+    return { status: fallbackStatus, dayCount: 0 };
+  }
+
+  const submittedDate = new Date(submittedAt);
+  const targetDate = new Date(targetDateTime);
+  if (Number.isNaN(submittedDate.getTime()) || Number.isNaN(targetDate.getTime())) {
+    const fallbackStatus = normalizeTimingStatus(
+      task?.submissionTimingStatus || task?.timelinessStatus
+    );
+
+    return { status: fallbackStatus, dayCount: 0 };
+  }
+
+  const dayDifference = getIndiaDayDifference(submittedAt, targetDateTime);
+
+  if (submittedDate.getTime() > targetDate.getTime()) {
+    return { status: "delayed", dayCount: Math.max(1, dayDifference) };
+  }
+
+  if (submittedDate.getTime() < targetDate.getTime()) {
+    const advanceDays = Math.max(0, dayDifference * -1);
+
+    if (advanceDays > 0) {
+      return { status: "advance", dayCount: advanceDays };
+    }
+  }
+
+  return { status: "on_time", dayCount: 0 };
+};
+
+const formatTimeStatusDayCount = (value) =>
+  `${value} day${value === 1 ? "" : "s"}`;
+
+export const formatTaskTimeStatusLabel = (task = {}) => {
+  const summary = getTaskTimeStatusSummary(task);
+
+  switch (normalizeTimingStatus(summary.status)) {
+    case "advance":
+      return summary.dayCount > 0
+        ? `Advance - ${formatTimeStatusDayCount(summary.dayCount)}`
+        : "Advance";
+    case "delayed":
+      return summary.dayCount > 0
+        ? `Delay - ${formatTimeStatusDayCount(summary.dayCount)}`
+        : "Delay";
+    case "on_time":
+      return "On Time";
+    case "pending":
+    default:
+      return "Pending";
+  }
+};
+
+export const getTaskTimeStatusBadgeClass = (task = {}) =>
+  ({
+    advance: "bg-info text-dark",
+    delayed: "bg-danger",
+    on_time: "bg-success",
+    pending: "bg-secondary",
+  }[normalizeTimingStatus(getTaskTimeStatusSummary(task).status)] || "bg-secondary");
+
 export const formatTargetDayCountLabel = (value) => {
   const normalizedValue = parseOptionalNumber(value);
 

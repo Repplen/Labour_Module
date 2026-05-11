@@ -527,19 +527,14 @@ const buildSafeEmployeeQrProfile = (req, employeeDoc) => {
   return {
     employeeCode: employee.employeeCode || "",
     employeeName: employee.employeeName || "",
-    photoUrl: getEmployeePhotoUrl(req, employee),
+    profilePhoto: getEmployeePhotoUrl(req, employee),
+    companyName: companyNames.join(", "),
     designation: employee.designation?.name || "",
     department: employee.departmentDisplay || employee.departmentName || "",
-    subDepartment:
-      employee.subDepartmentDisplay ||
-      employee.subDepartmentPath ||
-      employee.subDepartmentName ||
-      "",
-    site: siteRows.map(formatSiteDisplayName).filter(Boolean).join(", "),
-    company: companyNames.join(", "),
-    isActive: employee.isActive !== false,
+    dateOfJoining: employee.dateOfJoining || null,
+    mobile: employee.mobile || "",
     status: employee.isActive === false ? "Inactive" : "Active",
-    lastUpdatedAt: employee.updatedAt || employee.createdAt || null,
+    updatedAt: employee.updatedAt || employee.createdAt || null,
   };
 };
 
@@ -567,17 +562,13 @@ const buildEmployeeQrPayload = (employee = {}) => ({
   qrEnabled: employee.qrEnabled !== false,
 });
 
-const ensureEmployeeQrFields = async (req, employee, { regenerate = false } = {}) => {
-  const nextToken = regenerate || !employee.qrToken
-    ? await createUniqueEmployeeQrToken()
-    : employee.qrToken;
+const ensureEmployeeQrFields = async (req, employee) => {
+  const nextToken = !employee.qrToken ? await createUniqueEmployeeQrToken() : employee.qrToken;
   const qrCodeUrl = buildQrCodeUrl(req, nextToken);
 
   employee.qrToken = nextToken;
   employee.qrCodeUrl = qrCodeUrl;
-  employee.qrGeneratedAt = regenerate || !employee.qrGeneratedAt
-    ? new Date()
-    : employee.qrGeneratedAt;
+  employee.qrGeneratedAt = !employee.qrGeneratedAt ? new Date() : employee.qrGeneratedAt;
 
   if (typeof employee.qrEnabled !== "boolean") {
     employee.qrEnabled = true;
@@ -875,25 +866,6 @@ exports.getOrCreateEmployeeQr = async (req, res) => {
     return res
       .status(err.status || 500)
       .json({ message: err.message || "Failed to generate employee QR code" });
-  }
-};
-
-exports.regenerateEmployeeQr = async (req, res) => {
-  try {
-    const employee = await findScopedEmployeeById(req, req.params.id);
-
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
-
-    employee.qrEnabled = true;
-    await ensureEmployeeQrFields(req, employee, { regenerate: true });
-    return res.json(buildEmployeeQrPayload(employee));
-  } catch (err) {
-    console.error("Employee QR regeneration error:", err);
-    return res
-      .status(err.status || 500)
-      .json({ message: err.message || "Failed to regenerate employee QR code" });
   }
 };
 

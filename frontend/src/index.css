@@ -7134,18 +7134,54 @@ hr {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  padding: 32px 18px;
   background:
-    linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)),
-    url("./images/welcome.jpg") center / cover no-repeat;
+    linear-gradient(135deg, #07111f 0%, #10263a 48%, #151b2e 100%);
+  animation: employeeQrPageFadeIn 420ms ease-out both;
+}
+
+.employee-qr-profile-page__wash {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(96, 165, 250, 0.18), transparent 34%),
+    linear-gradient(245deg, rgba(20, 184, 166, 0.14), transparent 38%),
+    linear-gradient(0deg, rgba(8, 17, 31, 0.78), rgba(15, 23, 42, 0.1));
+  filter: blur(18px);
+  transform: translate3d(0, 0, 0);
+  animation: employeeQrBackgroundDrift 12s ease-in-out infinite alternate;
 }
 
 .employee-qr-profile-card {
+  position: relative;
+  z-index: 1;
   width: min(920px, 100%);
-  padding: 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+  padding: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+  animation: employeeQrCardSlideUp 520ms ease-out both;
+}
+
+.employee-qr-profile-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    120deg,
+    rgba(59, 130, 246, 0.22),
+    rgba(255, 255, 255, 0.2),
+    rgba(20, 184, 166, 0.18)
+  );
+  opacity: 0.78;
+  animation: employeeQrBorderGlow 4.5s ease-in-out infinite alternate;
 }
 
 .employee-qr-profile-card--message {
@@ -7156,36 +7192,68 @@ hr {
 .employee-qr-profile-card--message h1,
 .employee-qr-profile-card__header h1 {
   margin: 0;
-  color: #111827;
+  color: #122033;
+}
+
+.employee-qr-profile-card--message p {
+  margin: 10px 0 0;
+  color: #64748b;
+}
+
+.employee-qr-profile-loading {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 18px;
+  border: 4px solid rgba(37, 99, 235, 0.14);
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: employeeQrSpin 900ms linear infinite;
 }
 
 .employee-qr-profile-card__header {
   display: flex;
   align-items: center;
   gap: 22px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 8px 26px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
 }
 
 .employee-qr-profile-card__photo,
 .employee-qr-profile-card__photo-fallback {
-  width: 112px;
-  height: 112px;
-  border-radius: 8px;
+  width: 128px;
+  height: 128px;
+  border-radius: 999px;
+}
+
+.employee-qr-profile-card__photo-shell {
   flex: 0 0 auto;
+  padding: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 42px rgba(30, 64, 175, 0.16);
 }
 
 .employee-qr-profile-card__photo {
   object-fit: cover;
+  display: block;
+  border: 4px solid #ffffff;
 }
 
 .employee-qr-profile-card__photo-fallback {
   display: grid;
   place-items: center;
-  background: #111827;
+  border: 4px solid #ffffff;
+  background: linear-gradient(135deg, #2563eb, #14b8a6);
   color: #ffffff;
-  font-size: 2.25rem;
-  font-weight: 700;
+  font-size: 2.8rem;
+  font-weight: 800;
+  box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.16);
+}
+
+.employee-qr-profile-card__identity {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .employee-qr-profile-card__kicker {
@@ -7193,45 +7261,137 @@ hr {
   font-size: 0.75rem;
   font-weight: 700;
   color: #2563eb;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
+}
+
+.employee-qr-profile-card__header h1 {
+  margin-top: 4px;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .employee-qr-profile-card__code {
-  margin: 4px 0 10px;
-  color: #6b7280;
+  margin-top: 8px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.employee-qr-profile-card__status {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.employee-qr-profile-card__status--active {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.employee-qr-profile-card__status--inactive {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 .employee-qr-profile-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 26px;
 }
 
 .employee-qr-profile-field {
-  padding: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
+  min-height: 116px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.employee-qr-profile-field:hover {
+  transform: translateY(-4px);
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.12);
 }
 
 .employee-qr-profile-field__label {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: #6b7280;
+  color: #64748b;
+  letter-spacing: 0;
 }
 
 .employee-qr-profile-field__value {
-  margin-top: 4px;
-  color: #111827;
-  font-weight: 600;
+  margin-top: 10px;
+  color: #122033;
+  font-size: 1rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .employee-qr-profile-card__updated {
-  margin-top: 18px;
-  color: #6b7280;
-  font-size: 0.9rem;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  color: #64748b;
+  font-size: 0.92rem;
+  text-align: right;
+}
+
+@keyframes employeeQrPageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes employeeQrCardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes employeeQrBorderGlow {
+  from {
+    opacity: 0.44;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+
+@keyframes employeeQrBackgroundDrift {
+  from {
+    transform: translate3d(-1.5%, -1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(1.5%, 1%, 0) scale(1.03);
+  }
+}
+
+@keyframes employeeQrSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 767.98px) {
@@ -7242,11 +7402,28 @@ hr {
 
   .employee-qr-profile-card {
     padding: 20px;
+    border-radius: 22px;
   }
 
   .employee-qr-profile-card__header {
-    align-items: flex-start;
+    align-items: center;
     flex-direction: column;
+    text-align: center;
+    padding-inline: 0;
+  }
+
+  .employee-qr-profile-card__status {
+    align-self: center;
+  }
+
+  .employee-qr-profile-card__photo,
+  .employee-qr-profile-card__photo-fallback {
+    width: 112px;
+    height: 112px;
+  }
+
+  .employee-qr-profile-card__updated {
+    text-align: center;
   }
 }
 

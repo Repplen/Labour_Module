@@ -8,22 +8,38 @@ const getInitial = (profile) =>
     .charAt(0)
     .toUpperCase() || "?";
 
+const formatDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 export default function EmployeeQrProfile() {
   const { qrToken } = useParams();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [imageError, setImageError] = useState(false);
-  const statusClass = profile?.isActive ? "bg-success" : "bg-secondary";
-  const updatedLabel = useMemo(() => {
-    if (!profile?.lastUpdatedAt) return "";
-
-    const date = new Date(profile.lastUpdatedAt);
-    if (Number.isNaN(date.getTime())) return "";
-
-    return date.toLocaleString();
-  }, [profile?.lastUpdatedAt]);
-
+  const profilePhoto = profile?.profilePhoto || profile?.photoUrl || "";
+  const isActive = String(profile?.status || "").trim().toLowerCase() === "active";
+  const detailRows = useMemo(
+    () => [
+      { label: "Company", value: profile?.companyName },
+      { label: "Designation", value: profile?.designation },
+      { label: "Department", value: profile?.department },
+      { label: "Date of Joining", value: formatDate(profile?.dateOfJoining) },
+      { label: "Mobile Number", value: profile?.mobile },
+      { label: "Status", value: profile?.status },
+    ],
+    [profile]
+  );
   useEffect(() => {
     let active = true;
 
@@ -55,10 +71,18 @@ export default function EmployeeQrProfile() {
     };
   }, [qrToken]);
 
+  useEffect(() => {
+    setImageError(false);
+  }, [profilePhoto]);
+
   if (loading) {
     return (
       <div className="employee-qr-profile-page">
-        <div className="employee-qr-profile-card">Loading employee profile...</div>
+        <div className="employee-qr-profile-card employee-qr-profile-card--message">
+          <div className="employee-qr-profile-loading" />
+          <h1>Loading Employee Profile</h1>
+          <p>Fetching the latest employee details...</p>
+        </div>
       </div>
     );
   }
@@ -76,45 +100,47 @@ export default function EmployeeQrProfile() {
 
   return (
     <div className="employee-qr-profile-page">
+      <div className="employee-qr-profile-page__wash" />
       <div className="employee-qr-profile-card">
         <div className="employee-qr-profile-card__header">
-          {!imageError && profile.photoUrl ? (
-            <img
-              src={profile.photoUrl}
-              alt={profile.employeeName || "Employee"}
-              className="employee-qr-profile-card__photo"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <div className="employee-qr-profile-card__photo-fallback">
-              {getInitial(profile)}
-            </div>
-          )}
+          <div className="employee-qr-profile-card__photo-shell">
+            {!imageError && profilePhoto ? (
+              <img
+                src={profilePhoto}
+                alt={profile.employeeName || "Employee"}
+                className="employee-qr-profile-card__photo"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="employee-qr-profile-card__photo-fallback">
+                {getInitial(profile)}
+              </div>
+            )}
+          </div>
 
-          <div>
-            <div className="employee-qr-profile-card__kicker">Employee Profile</div>
+          <div className="employee-qr-profile-card__identity">
             <h1>{profile.employeeName || "-"}</h1>
             <div className="employee-qr-profile-card__code">
-              {profile.employeeCode || "Employee code not available"}
+              Employee Code: {profile.employeeCode || "-"}
             </div>
-            <span className={`badge ${statusClass}`}>{profile.status}</span>
           </div>
+
+          <span
+            className={`employee-qr-profile-card__status ${
+              isActive
+                ? "employee-qr-profile-card__status--active"
+                : "employee-qr-profile-card__status--inactive"
+            }`}
+          >
+            {profile.status || "-"}
+          </span>
         </div>
 
         <div className="employee-qr-profile-grid">
-          <ProfileField label="Designation" value={profile.designation} />
-          <ProfileField label="Company" value={profile.company} />
-          <ProfileField label="Department" value={profile.department} />
-          <ProfileField label="Sub Department" value={profile.subDepartment} />
-          <ProfileField label="Site" value={profile.site} />
-          <ProfileField label="Status" value={profile.status} />
+          {detailRows.map((item) => (
+            <ProfileField key={item.label} label={item.label} value={item.value} />
+          ))}
         </div>
-
-        {updatedLabel ? (
-          <div className="employee-qr-profile-card__updated">
-            Latest profile update: {updatedLabel}
-          </div>
-        ) : null}
       </div>
     </div>
   );

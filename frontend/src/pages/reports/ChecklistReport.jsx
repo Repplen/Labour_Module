@@ -5,25 +5,19 @@ import { usePermissions } from "../../context/usePermissions";
 import { formatDepartmentList } from "../../utils/departmentDisplay";
 import {
   formatApprovalWorkflowLabel,
-  formatApprovalTypeLabel,
   formatChecklistScoreLabel,
   formatChecklistTaskStatus,
   formatCurrentApproverLabel,
   formatDateTime,
   formatEmployeeLabel,
-  formatMarkAdjustment,
   formatPriorityLabel,
   formatScheduleLabel,
   formatTaskFinalMarkLabel,
-  formatTaskMarkDayLabel,
-  formatTimelinessLabel,
-  getTaskTargetDateTime,
-  getApprovalTypeBadgeClass,
+  formatTaskTimeStatusLabel,
   getApprovalWorkflowEmployees,
   getPriorityBadgeClass,
   getPriorityRowClass,
-  getTaskMarkSummary,
-  getTimelinessBadgeClass,
+  getTaskTimeStatusBadgeClass,
   getChecklistTaskStatusBadgeClass,
 } from "../../utils/checklistDisplay";
 
@@ -583,14 +577,9 @@ export default function ChecklistReport() {
               <th>Schedule</th>
               <th>Start</th>
               <th>End</th>
-              <th>Target Date / Time</th>
               <th>Submitted At</th>
-              <th>Submission Status</th>
-              <th>Approval Type</th>
               <th>Scoring</th>
               <th>Time Status</th>
-              <th>Delay/Advance</th>
-              <th>Adjustment</th>
               <th>Final Mark</th>
               <th>Current Approver</th>
               <th>Approval Status</th>
@@ -600,7 +589,7 @@ export default function ChecklistReport() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan="21" className="text-center">
+                <td colSpan="16" className="text-center">
                   Loading checklist task report...
                 </td>
               </tr>
@@ -608,7 +597,7 @@ export default function ChecklistReport() {
 
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan="21" className="text-center">
+                <td colSpan="16" className="text-center">
                   No checklist task records found
                 </td>
               </tr>
@@ -619,7 +608,6 @@ export default function ChecklistReport() {
                 const currentApproverLabel = formatCurrentApproverLabel(row);
                 const approvalWorkflowLabel = formatApprovalWorkflowLabel(row);
                 const workflowCount = getApprovalWorkflowEmployees(row).length;
-                const markSummary = getTaskMarkSummary(row);
                 const approverPrimaryLabel =
                   currentApproverLabel && currentApproverLabel !== "-"
                     ? currentApproverLabel
@@ -647,35 +635,12 @@ export default function ChecklistReport() {
                   <td>{formatScheduleLabel(row)}</td>
                   <td>{formatDateTime(row.occurrenceDate)}</td>
                   <td>{formatDateTime(row.endDateTime)}</td>
-                  <td>{formatDateTime(getTaskTargetDateTime(row))}</td>
                   <td>{formatDateTime(row.submittedAt)}</td>
-                  <td>{row.submittedAt ? "Submitted" : "Pending Submission"}</td>
-                  <td>
-                    <span className={`badge ${getApprovalTypeBadgeClass(row)}`}>
-                      {formatApprovalTypeLabel(row)}
-                    </span>
-                  </td>
                   <td>{formatChecklistScoreLabel(row)}</td>
                   <td>
-                    <span
-                      className={`badge ${getTimelinessBadgeClass(
-                        row.submissionTimingStatus || row.timelinessStatus
-                      )}`}
-                    >
-                      {formatTimelinessLabel(
-                        row.submissionTimingStatus || row.timelinessStatus
-                      )}
+                    <span className={`badge ${getTaskTimeStatusBadgeClass(row)}`}>
+                      {formatTaskTimeStatusLabel(row)}
                     </span>
-                  </td>
-                  <td>{formatTaskMarkDayLabel(row)}</td>
-                  <td>
-                    {markSummary.isNilApproval
-                      ? "No Mark"
-                      : markSummary.enableMark
-                      ? markSummary.adjustment !== null
-                        ? formatMarkAdjustment(markSummary.adjustment)
-                        : "Pending"
-                      : "Not enabled"}
                   </td>
                   <td>{formatTaskFinalMarkLabel(row)}</td>
                   <td>

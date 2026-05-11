@@ -396,28 +396,6 @@ export default function EmployeeList() {
     setQrError("");
   };
 
-  const regenerateQr = async () => {
-    if (!qrModalEmployee) return;
-
-    setQrActionLoading("regenerate");
-    setQrError("");
-    setQrCopyMessage("");
-
-    try {
-      const response = await api.post(`/employees/${qrModalEmployee._id}/qr/regenerate`, {
-        publicBaseUrl: window.location.origin,
-      });
-      setQrDataUrl("");
-      setQrDetails(response.data || null);
-      updateEmployeeQrState(qrModalEmployee._id, response.data || {});
-    } catch (err) {
-      console.error("Employee QR regenerate failed:", err);
-      setQrError(err.response?.data?.message || "Failed to regenerate employee QR code");
-    } finally {
-      setQrActionLoading("");
-    }
-  };
-
   const toggleQrAccess = async () => {
     if (!qrModalEmployee || !qrDetails) return;
 
@@ -971,7 +949,6 @@ export default function EmployeeList() {
           error={qrError}
           copyMessage={qrCopyMessage}
           onClose={closeQrModal}
-          onRegenerate={regenerateQr}
           onToggleAccess={toggleQrAccess}
           onDownload={downloadQr}
           onPrint={printQr}
@@ -992,7 +969,6 @@ function EmployeeQrModal({
   error,
   copyMessage,
   onClose,
-  onRegenerate,
   onToggleAccess,
   onDownload,
   onPrint,
@@ -1109,28 +1085,18 @@ function EmployeeQrModal({
 
             <div className="d-flex flex-wrap gap-2">
               {canEditQr ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-outline-warning"
-                    onClick={onRegenerate}
-                    disabled={!details || isActionBusy}
-                  >
-                    {actionLoading === "regenerate" ? "Regenerating..." : "Regenerate"}
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${details?.qrEnabled ? "btn-outline-danger" : "btn-success"}`}
-                    onClick={onToggleAccess}
-                    disabled={!details || isActionBusy}
-                  >
-                    {actionLoading === "access"
-                      ? "Updating..."
-                      : details?.qrEnabled
-                      ? "Disable QR"
-                      : "Enable QR"}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className={`btn ${details?.qrEnabled ? "btn-outline-danger" : "btn-success"}`}
+                  onClick={onToggleAccess}
+                  disabled={!details || isActionBusy}
+                >
+                  {actionLoading === "access"
+                    ? "Updating..."
+                    : details?.qrEnabled
+                    ? "Disable QR"
+                    : "Enable QR"}
+                </button>
               ) : null}
               <button
                 type="button"

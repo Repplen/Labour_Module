@@ -165,19 +165,20 @@ const checklistTaskReportExcelColumns = [
   { header: "Schedule", key: "schedule", width: 20 },
   { header: "Start", key: "start", width: 22 },
   { header: "End", key: "end", width: 22 },
-  { header: "Target Date / Time", key: "targetDateTime", width: 24 },
   { header: "Submitted At", key: "submittedAt", width: 22 },
-  { header: "Submission Status", key: "submissionStatus", width: 20 },
-  { header: "Approval Type", key: "approvalType", width: 16 },
   { header: "Scoring", key: "scoring", width: 30 },
   { header: "Time Status", key: "timeStatus", width: 16 },
-  { header: "Delay / Advance", key: "delayAdvance", width: 18 },
-  { header: "Adjustment", key: "adjustment", width: 14 },
   { header: "Final Mark", key: "finalMark", width: 14 },
   { header: "Current Approver", key: "currentApprover", width: 26 },
   { header: "Approval Workflow", key: "approvalWorkflow", width: 34 },
   { header: "Approval Status", key: "approvalStatus", width: 18 },
 ];
+
+const checklistTaskReportDelayRowFill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFFFE5E5" },
+};
 
 const reportMarkFormatter = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 0,
@@ -2670,20 +2671,74 @@ const getChecklistTaskMarkSummary = (task = {}) => {
   };
 };
 
+const getChecklistTaskTimeStatusSummary = (task = {}) => {
+  const targetDateTime = getChecklistTaskTargetDateTime(task);
+
+  if (!task?.submittedAt) {
+    return { status: "pending", dayCount: 0 };
+  }
+
+  if (!targetDateTime) {
+    return {
+      status: normalizeTaskTimingStatus(task?.submissionTimingStatus || task?.timelinessStatus),
+      dayCount: 0,
+    };
+  }
+
+  const submittedDate = new Date(task.submittedAt);
+  const targetDate = new Date(targetDateTime);
+  if (Number.isNaN(submittedDate.getTime()) || Number.isNaN(targetDate.getTime())) {
+    return {
+      status: normalizeTaskTimingStatus(task?.submissionTimingStatus || task?.timelinessStatus),
+      dayCount: 0,
+    };
+  }
+
+  const dayDifference = getReportDayDifference(task.submittedAt, targetDateTime);
+
+  if (submittedDate.getTime() > targetDate.getTime()) {
+    return { status: "delayed", dayCount: Math.max(1, dayDifference) };
+  }
+
+  if (submittedDate.getTime() < targetDate.getTime()) {
+    const advanceDays = Math.max(0, dayDifference * -1);
+
+    if (advanceDays > 0) {
+      return { status: "advance", dayCount: advanceDays };
+    }
+  }
+
+  return { status: "on_time", dayCount: 0 };
+};
+
+const formatTimeStatusDayCount = (value) =>
+  `${value} day${value === 1 ? "" : "s"}`;
+
+const formatChecklistTaskReportTimeStatusLabel = (task = {}) => {
+  const summary = getChecklistTaskTimeStatusSummary(task);
+
+  switch (normalizeTaskTimingStatus(summary.status)) {
+    case "advance":
+      return summary.dayCount > 0
+        ? `Advance - ${formatTimeStatusDayCount(summary.dayCount)}`
+        : "Advance";
+    case "delayed":
+      return summary.dayCount > 0
+        ? `Delay - ${formatTimeStatusDayCount(summary.dayCount)}`
+        : "Delay";
+    case "on_time":
+      return "On Time";
+    case "pending":
+    default:
+      return "Pending";
+  }
+};
+
 const formatReportMarkValue = (value) => {
   const normalizedValue = roundMarkValue(value);
   return normalizedValue === null
     ? reportMarkFormatter.format(0)
     : reportMarkFormatter.format(normalizedValue);
-};
-
-const formatReportMarkAdjustment = (value) => {
-  const normalizedValue = roundMarkValue(value);
-
-  if (normalizedValue === null) return formatReportMarkValue(0);
-  if (normalizedValue > 0) return `+${formatReportMarkValue(normalizedValue)}`;
-  if (normalizedValue < 0) return `-${formatReportMarkValue(Math.abs(normalizedValue))}`;
-  return formatReportMarkValue(0);
 };
 
 const formatChecklistTaskScoringLabel = (task = {}) => {
@@ -2693,22 +2748,6 @@ const formatChecklistTaskScoringLabel = (task = {}) => {
   if (!markConfig.enableMark) return "Disabled";
 
   return `Base ${formatReportMarkValue(markConfig.baseMark)}`;
-};
-
-const formatChecklistTaskMarkDayLabel = (task = {}) => {
-  const markSummary = getChecklistTaskMarkSummary(task);
-
-  if (markSummary.isNilApproval) return "No Mark";
-  if (!markSummary.enableMark) return "Not enabled";
-  if (markSummary.direction === "pending") return "Pending";
-  if (markSummary.direction === "delay") {
-    return `${markSummary.delayDays} day${markSummary.delayDays === 1 ? "" : "s"} delay`;
-  }
-  if (markSummary.direction === "advance") {
-    return `${markSummary.advanceDays} day${markSummary.advanceDays === 1 ? "" : "s"} advance`;
-  }
-
-  return "On time";
 };
 
 const formatChecklistTaskFinalMarkLabel = (task = {}) => {
@@ -2778,9 +2817,6 @@ const formatChecklistTaskTimelinessLabel = (value) => {
   }
 };
 
-const formatChecklistTaskApprovalTypeLabel = (task = {}) =>
-  isNilChecklistTask(task) ? "Nil" : "Normal";
-
 const getCurrentApprover = (task = {}) => {
   if (task?.currentApprovalEmployee) {
     return task.currentApprovalEmployee;
@@ -2838,8 +2874,6 @@ const formatChecklistTaskWorkflowLabel = (task = {}) => {
 };
 
 const buildChecklistTaskReportRow = (task = {}, index = 0) => {
-  const markSummary = getChecklistTaskMarkSummary(task);
-
   return {
     serialNumber: index + 1,
     taskNumber: normalizeText(task.taskNumber) || "-",
@@ -2851,27 +2885,31 @@ const buildChecklistTaskReportRow = (task = {}, index = 0) => {
     schedule: formatChecklistTaskScheduleLabel(task),
     start: formatReportDateTime(task.occurrenceDate),
     end: formatReportDateTime(task.endDateTime),
-    targetDateTime: formatReportDateTime(getChecklistTaskTargetDateTime(task)),
     submittedAt: formatReportDateTime(task.submittedAt),
-    submissionStatus: task?.submittedAt ? "Submitted" : "Pending Submission",
-    approvalType: formatChecklistTaskApprovalTypeLabel(task),
     scoring: formatChecklistTaskScoringLabel(task),
-    timeStatus: formatChecklistTaskTimelinessLabel(
-      task?.submissionTimingStatus || task?.timelinessStatus
-    ),
-    delayAdvance: formatChecklistTaskMarkDayLabel(task),
-    adjustment: markSummary.isNilApproval
-      ? "No Mark"
-      : markSummary.enableMark
-      ? markSummary.adjustment !== null
-        ? formatReportMarkAdjustment(markSummary.adjustment)
-        : "Pending"
-      : "Not enabled",
+    timeStatus: formatChecklistTaskReportTimeStatusLabel(task),
     finalMark: formatChecklistTaskFinalMarkLabel(task),
     currentApprover: formatChecklistTaskCurrentApproverLabel(task),
     approvalWorkflow: formatChecklistTaskWorkflowLabel(task),
     approvalStatus: formatChecklistTaskStatusLabel(task.status),
   };
+};
+
+const applyChecklistTaskReportExcelStyles = (worksheet) => {
+  const timeStatusColumnNumber =
+    checklistTaskReportExcelColumns.findIndex((column) => column.key === "timeStatus") + 1;
+  if (!timeStatusColumnNumber) return;
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+
+    const timeStatus = normalizeText(row.getCell(timeStatusColumnNumber).value).toLowerCase();
+    if (!timeStatus.startsWith("delay")) return;
+
+    row.eachCell((cell) => {
+      cell.fill = checklistTaskReportDelayRowFill;
+    });
+  });
 };
 
 const buildChecklistTaskReportFilterSummary = (query = {}) => {
@@ -3263,28 +3301,20 @@ const buildChecklistTaskPdfPages = (reportRows = [], query = {}) => {
       });
     };
 
-    addWrappedBlock(
-      `${row.serialNumber}. ${row.taskNumber} | ${row.approvalStatus} | ${row.submissionStatus}`,
-      "F2",
-      11,
-      12
-    );
+    addWrappedBlock(`${row.serialNumber}. ${row.taskNumber} | ${row.approvalStatus}`, "F2", 11, 12);
     addWrappedBlock(`Checklist: ${row.checklistName} (${row.checklistNumber})`);
     addWrappedBlock(`Employee: ${row.employee} | Department: ${row.department}`);
     addWrappedBlock(`Priority: ${row.priority} | Schedule: ${row.schedule}`);
     addWrappedBlock(`Start: ${row.start} | End: ${row.end}`);
-    addWrappedBlock(`Target: ${row.targetDateTime} | Submitted: ${row.submittedAt}`);
-    addWrappedBlock(
-      `Approval Type: ${row.approvalType} | Current Approver: ${row.currentApprover}`
-    );
+    addWrappedBlock(`Submitted: ${row.submittedAt}`);
+    addWrappedBlock(`Current Approver: ${row.currentApprover}`);
 
     if (row.approvalWorkflow && row.approvalWorkflow !== "-") {
       addWrappedBlock(`Workflow: ${row.approvalWorkflow}`);
     }
 
     addWrappedBlock(`Scoring: ${row.scoring}`);
-    addWrappedBlock(`Time Status: ${row.timeStatus} | Delay/Advance: ${row.delayAdvance}`);
-    addWrappedBlock(`Adjustment: ${row.adjustment} | Final Mark: ${row.finalMark}`);
+    addWrappedBlock(`Time Status: ${row.timeStatus} | Final Mark: ${row.finalMark}`);
     block.push({ text: "", font: "F1", size: 10, gap: 12 });
 
     ensurePageCapacity(block.length);
@@ -5315,6 +5345,7 @@ exports.exportChecklistTaskReportExcel = async (req, res) => {
     (reportResult.tasks || []).forEach((task, index) => {
       worksheet.addRow(buildChecklistTaskReportRow(task, index));
     });
+    applyChecklistTaskReportExcelStyles(worksheet);
 
     res.setHeader(
       "Content-Type",

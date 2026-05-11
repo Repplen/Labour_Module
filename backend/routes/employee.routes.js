@@ -28,13 +28,6 @@ router.post(
   validateRequest({ params: idParamSchema }),
   controller.getOrCreateEmployeeQr
 );
-router.post(
-  "/:id/qr/regenerate",
-  auth,
-  requirePermission("employee_master", "edit"),
-  validateRequest({ params: idParamSchema }),
-  controller.regenerateEmployeeQr
-);
 router.patch(
   "/:id/qr/access",
   auth,
