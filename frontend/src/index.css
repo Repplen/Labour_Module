@@ -1541,6 +1541,51 @@ a:hover {
   margin-bottom: 0;
 }
 
+.checklist-master-table {
+  min-width: 1420px;
+}
+
+.checklist-master-table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.checklist-master-table .checklist-table-filter-row th {
+  position: sticky;
+  top: 42px;
+  z-index: 3;
+  padding: 0.38rem;
+  background-color: #212529 !important;
+  vertical-align: middle;
+}
+
+.checklist-table-filter-control {
+  min-width: 104px;
+  height: 31px;
+  font-size: 0.78rem;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.checklist-table-filter-control::placeholder {
+  color: #6c757d;
+}
+
+.checklist-table-filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 112px;
+}
+
+.checklist-table-filter-actions .btn {
+  min-height: 31px;
+  padding-inline: 0.55rem;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
 .page-kicker {
   font-size: 0.78rem;
   font-weight: 700;
@@ -4049,6 +4094,49 @@ a:hover {
   color: var(--app-brand);
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.employee-directory-advanced-filters {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(47, 115, 255, 0.12);
+}
+
+.employee-directory-advanced-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 0.85rem;
+}
+
+.employee-directory-advanced-filter-grid .form-label {
+  margin-bottom: 0.35rem;
+}
+
+.employee-directory-advanced-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+@media (max-width: 1199.98px) {
+  .employee-directory-advanced-filter-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .employee-directory-advanced-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-directory-advanced-filter-actions {
+    justify-content: stretch;
+  }
+
+  .employee-directory-advanced-filter-actions .btn {
+    flex: 1 1 auto;
+  }
 }
 
 .employee-directory-table-shell {

@@ -63,6 +63,82 @@ describe("checklist list", () => {
     ).toBeInTheDocument();
   });
 
+  test("applies checklist master table heading filters together", async () => {
+    api.get.mockResolvedValue({
+      data: [
+        {
+          _id: "checklist-1",
+          checklistNumber: "CHK-001",
+          checklistName: "Daily Safety Walk",
+          checklistSourceSite: { name: "HQ" },
+          assignedToEmployee: {
+            employeeCode: "EMP-001",
+            employeeName: "Karthick",
+          },
+          priority: "medium",
+          scheduleType: "daily",
+          scheduleTime: "09:00",
+          startDate: "2026-04-25T00:00:00.000Z",
+          endDate: null,
+          endTime: "",
+          nextOccurrenceAt: null,
+          status: true,
+          approvalHierarchy: "default",
+          approvals: [],
+          isDependentTask: false,
+        },
+        {
+          _id: "checklist-2",
+          checklistNumber: "CHK-002",
+          checklistName: "Weekly Fire Audit",
+          checklistSourceSite: { name: "Branch" },
+          assignedToEmployee: {
+            employeeCode: "EMP-002",
+            employeeName: "Asha",
+          },
+          priority: "high",
+          scheduleType: "weekly",
+          scheduleTime: "10:00",
+          startDate: "2026-04-26T00:00:00.000Z",
+          endDate: null,
+          endTime: "",
+          nextOccurrenceAt: null,
+          status: true,
+          approvalHierarchy: "default",
+          approvals: [],
+          isDependentTask: false,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <ChecklistList />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Daily Safety Walk")).toBeInTheDocument();
+    expect(screen.getByText("Weekly Fire Audit")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/filter by schedule/i), {
+      target: { value: "daily" },
+    });
+    fireEvent.change(screen.getByLabelText(/filter by priority/i), {
+      target: { value: "medium" },
+    });
+    fireEvent.change(screen.getByLabelText(/filter by employee/i), {
+      target: { value: "Karthick" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /apply table filters/i }));
+
+    expect(screen.getByText("Daily Safety Walk")).toBeInTheDocument();
+    expect(screen.queryByText("Weekly Fire Audit")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /clear table filters/i }));
+
+    expect(screen.getByText("Weekly Fire Audit")).toBeInTheDocument();
+  });
+
   test("previews checklist import and saves only after OK", async () => {
     window.alert = vi.fn();
     api.get.mockResolvedValue({ data: [] });

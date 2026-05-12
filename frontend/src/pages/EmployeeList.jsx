@@ -29,6 +29,160 @@ const escapeHtml = (value = "") =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const EMPTY_EMPLOYEE_ADVANCED_FILTERS = {
+  code: "",
+  nameEmail: "",
+  mobile: "",
+  department: "",
+  subDepartment: "",
+  superiorEmployee: "",
+  site: "",
+  subSite: "",
+  designation: "",
+  status: "",
+};
+
+const normalizeFilterText = (value) => String(value || "").trim().toLowerCase();
+
+const textIncludesFilter = (value, filterValue) => {
+  const normalizedFilter = normalizeFilterText(filterValue);
+  if (!normalizedFilter) return true;
+  return normalizeFilterText(value).includes(normalizedFilter);
+};
+
+const hasEmployeeAdvancedFilters = (filters = {}) =>
+  Object.values(filters).some((value) => String(value || "").trim());
+
+const splitDisplayList = (value) =>
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getEmployeeDepartmentLabels = (employee = {}) => {
+  const details = Array.isArray(employee.departmentDetails)
+    ? employee.departmentDetails
+    : [];
+  const labels = details.map((department) => department?.name).filter(Boolean);
+
+  return labels.length
+    ? labels
+    : splitDisplayList(
+        employee.departmentDisplay ||
+          formatDepartmentList(employee.departmentDetails || employee.department)
+      );
+};
+
+const getEmployeeSubDepartmentLabels = (employee = {}) => {
+  const details = Array.isArray(employee.subDepartmentDetails)
+    ? employee.subDepartmentDetails
+    : [];
+  const labels = details
+    .map((subDepartment) => subDepartment?.path || subDepartment?.name)
+    .filter(Boolean);
+
+  return labels.length
+    ? labels
+    : splitDisplayList(
+        employee.subDepartmentDisplay ||
+          employee.subDepartmentPath ||
+          employee.subDepartmentName
+      );
+};
+
+const getEmployeeSuperiorLabel = (employee = {}) =>
+  String(employee.superiorEmployeeName || "").trim();
+
+const getEmployeeSiteLabels = (employee = {}) => {
+  const sites = Array.isArray(employee.sites) ? employee.sites : [];
+  const labels = sites
+    .map((site) => {
+      const companyName = String(site?.companyName || "").trim();
+      const name = String(site?.name || "").trim();
+      if (companyName && name) return `${companyName} - ${name}`;
+      return name || companyName;
+    })
+    .filter(Boolean);
+
+  return labels.length ? labels : splitDisplayList(formatSiteList(employee.sites));
+};
+
+const getEmployeeSubSiteLabels = (employee = {}) => {
+  const details = Array.isArray(employee.subSiteDetails) ? employee.subSiteDetails : [];
+  const labels = details
+    .map((subSite) => subSite?.subSitePath || subSite?.subSiteName)
+    .filter(Boolean);
+
+  return labels.length ? labels : splitDisplayList(employee.subSiteDisplay);
+};
+
+const getEmployeeDesignationLabel = (employee = {}) =>
+  String(employee.designation?.name || "").trim();
+
+const buildEmployeeAdvancedFilterOptions = (employees = []) => {
+  const optionSets = {
+    departments: new Set(),
+    subDepartments: new Set(),
+    superiorEmployees: new Set(),
+    sites: new Set(),
+    subSites: new Set(),
+    designations: new Set(),
+  };
+
+  employees.forEach((employee) => {
+    getEmployeeDepartmentLabels(employee).forEach((label) =>
+      optionSets.departments.add(label)
+    );
+    getEmployeeSubDepartmentLabels(employee).forEach((label) =>
+      optionSets.subDepartments.add(label)
+    );
+    getEmployeeSiteLabels(employee).forEach((label) => optionSets.sites.add(label));
+    getEmployeeSubSiteLabels(employee).forEach((label) => optionSets.subSites.add(label));
+
+    const superiorEmployee = getEmployeeSuperiorLabel(employee);
+    const designation = getEmployeeDesignationLabel(employee);
+
+    if (superiorEmployee) optionSets.superiorEmployees.add(superiorEmployee);
+    if (designation) optionSets.designations.add(designation);
+  });
+
+  const sortLabels = (left, right) =>
+    left.localeCompare(right, undefined, { sensitivity: "base" });
+
+  return Object.fromEntries(
+    Object.entries(optionSets).map(([key, value]) => [key, [...value].sort(sortLabels)])
+  );
+};
+
+const hasSelectedOption = (labels = [], selectedValue) => {
+  if (!selectedValue) return true;
+  const normalizedSelectedValue = normalizeFilterText(selectedValue);
+
+  return labels.some((label) => normalizeFilterText(label) === normalizedSelectedValue);
+};
+
+const filterEmployeesByAdvancedFilters = (employees = [], filters = {}) => {
+  if (!hasEmployeeAdvancedFilters(filters)) return employees;
+
+  return employees.filter((employee) => {
+    const nameEmailValue = [employee.employeeName, employee.email].filter(Boolean).join(" ");
+    const statusValue = employee.isActive ? "active" : "inactive";
+
+    return (
+      textIncludesFilter(employee.employeeCode, filters.code) &&
+      textIncludesFilter(nameEmailValue, filters.nameEmail) &&
+      textIncludesFilter(employee.mobile, filters.mobile) &&
+      hasSelectedOption(getEmployeeDepartmentLabels(employee), filters.department) &&
+      hasSelectedOption(getEmployeeSubDepartmentLabels(employee), filters.subDepartment) &&
+      hasSelectedOption([getEmployeeSuperiorLabel(employee)].filter(Boolean), filters.superiorEmployee) &&
+      hasSelectedOption(getEmployeeSiteLabels(employee), filters.site) &&
+      hasSelectedOption(getEmployeeSubSiteLabels(employee), filters.subSite) &&
+      hasSelectedOption([getEmployeeDesignationLabel(employee)].filter(Boolean), filters.designation) &&
+      (!filters.status || statusValue === normalizeFilterText(filters.status))
+    );
+  });
+};
+
 function ViewIcon() {
   return (
     <svg
@@ -135,6 +289,11 @@ export default function EmployeeList() {
   const [photoErrors, setPhotoErrors] = useState({});
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [advancedFiltersVisible, setAdvancedFiltersVisible] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_EMPLOYEE_ADVANCED_FILTERS);
+  const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState(
+    EMPTY_EMPLOYEE_ADVANCED_FILTERS
+  );
   const [loading, setLoading] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
@@ -163,6 +322,17 @@ export default function EmployeeList() {
     () => (api.defaults.baseURL || "http://localhost:5000/api").replace(/\/api\/?$/, ""),
     []
   );
+  const filteredEmployees = useMemo(
+    () => filterEmployeesByAdvancedFilters(employees, appliedAdvancedFilters),
+    [appliedAdvancedFilters, employees]
+  );
+  const advancedFilterOptions = useMemo(
+    () => buildEmployeeAdvancedFilterOptions(employees),
+    [employees]
+  );
+  const hasAdvancedFilters =
+    hasEmployeeAdvancedFilters(advancedFilters) ||
+    hasEmployeeAdvancedFilters(appliedAdvancedFilters);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -198,10 +368,10 @@ export default function EmployeeList() {
 
     setSelectedEmployeeIds((currentValue) =>
       currentValue.filter((selectedId) =>
-        employees.some((employee) => String(employee._id) === String(selectedId))
+        filteredEmployees.some((employee) => String(employee._id) === String(selectedId))
       )
     );
-  }, [canDeleteEmployee, employees]);
+  }, [canDeleteEmployee, filteredEmployees]);
 
   const removeEmployeesFromState = (employeeIds) => {
     const normalizedIds = employeeIds.map((id) => String(id));
@@ -225,7 +395,7 @@ export default function EmployeeList() {
   };
 
   const toggleAllEmployeeSelections = () => {
-    const visibleEmployeeIds = employees.map((employee) => String(employee._id));
+    const visibleEmployeeIds = filteredEmployees.map((employee) => String(employee._id));
 
     if (
       visibleEmployeeIds.length &&
@@ -479,21 +649,39 @@ export default function EmployeeList() {
     }
   };
 
+  const updateAdvancedFilter = (field, value) => {
+    setAdvancedFilters((currentValue) => ({
+      ...currentValue,
+      [field]: value,
+    }));
+  };
+
+  const applyAdvancedFilters = () => {
+    setAppliedAdvancedFilters(advancedFilters);
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters(EMPTY_EMPLOYEE_ADVANCED_FILTERS);
+    setAppliedAdvancedFilters(EMPTY_EMPLOYEE_ADVANCED_FILTERS);
+  };
+
   const clearFilters = () => {
     setSearch("");
     setStatus("");
+    clearAdvancedFilters();
   };
 
   const allEmployeesSelected =
-    employees.length > 0 &&
-    employees.every((employee) => selectedEmployeeIds.includes(String(employee._id)));
-  const activeCount = employees.filter((employee) => employee.isActive).length;
-  const inactiveCount = employees.length - activeCount;
-  const hasFilters = Boolean(search.trim() || status || department);
+    filteredEmployees.length > 0 &&
+    filteredEmployees.every((employee) => selectedEmployeeIds.includes(String(employee._id)));
+  const activeCount = filteredEmployees.filter((employee) => employee.isActive).length;
+  const inactiveCount = filteredEmployees.length - activeCount;
+  const hasFilters = Boolean(search.trim() || status || department || hasAdvancedFilters);
+  const canClearFilters = Boolean(search.trim() || status || hasAdvancedFilters);
   const stats = [
     {
       label: "Employees Visible",
-      value: employees.length,
+      value: filteredEmployees.length,
       meta: "Current search result set",
       accentClass: "employee-directory-stat-card--primary",
     },
@@ -514,6 +702,7 @@ export default function EmployeeList() {
     department ? "Department focus applied" : "",
     search.trim() ? `Search: ${search.trim()}` : "",
     getStatusFilterLabel(status),
+    hasEmployeeAdvancedFilters(appliedAdvancedFilters) ? "Advanced filters applied" : "",
   ].filter(Boolean);
 
   if (canDeleteEmployee) {
@@ -599,17 +788,27 @@ export default function EmployeeList() {
           <div>
             <h6 className="mb-1">Filters</h6>
             <div className="form-help">
-              Narrow the list by keyword or status, then move directly into view, edit, export, or
-              bulk clean-up actions.
+              Narrow the list by keyword, status, or advanced employee mapping filters.
             </div>
           </div>
 
           <div className="d-flex flex-wrap gap-2">
             <button
               type="button"
+              className={`btn ${
+                advancedFiltersVisible ? "btn-primary" : "btn-outline-primary"
+              }`}
+              onClick={() => setAdvancedFiltersVisible((currentValue) => !currentValue)}
+              aria-expanded={advancedFiltersVisible}
+              aria-controls="employee-advanced-filters"
+            >
+              {advancedFiltersVisible ? "Hide Filters" : "Filter"}
+            </button>
+            <button
+              type="button"
               className="btn btn-outline-secondary"
               onClick={clearFilters}
-              disabled={!search && !status}
+              disabled={!canClearFilters}
             >
               Clear Filters
             </button>
@@ -650,13 +849,24 @@ export default function EmployeeList() {
           </div>
         </div>
 
+        {advancedFiltersVisible ? (
+          <EmployeeAdvancedFilters
+            filters={advancedFilters}
+            options={advancedFilterOptions}
+            onChange={updateAdvancedFilter}
+            onApply={applyAdvancedFilters}
+            onClear={clearAdvancedFilters}
+            hasFilters={hasAdvancedFilters}
+          />
+        ) : null}
+
         {department ? (
           <div className="alert alert-info py-2 mt-3 mb-0">
             This list is currently filtered from a dashboard selection.
           </div>
         ) : hasFilters ? (
           <div className="form-help mt-3">
-            Filtered results update automatically while you type or change the status.
+            Top filters update automatically. Advanced filters update after Apply.
           </div>
         ) : null}
       </div>
@@ -676,7 +886,7 @@ export default function EmployeeList() {
                       className="form-check-input"
                       checked={allEmployeesSelected}
                       onChange={toggleAllEmployeeSelections}
-                      disabled={!employees.length || bulkDeleteLoading}
+                      disabled={!filteredEmployees.length || bulkDeleteLoading}
                       aria-label="Select all employees"
                     />
                   </th>
@@ -702,14 +912,14 @@ export default function EmployeeList() {
                     Loading employees...
                   </td>
                 </tr>
-              ) : employees.length === 0 ? (
+              ) : filteredEmployees.length === 0 ? (
                 <tr>
                   <td colSpan={canDeleteEmployee ? 12 : 11} className="text-center py-4">
                     No employees found for the current filters.
                   </td>
                 </tr>
               ) : (
-                employees.map((employee) => (
+                filteredEmployees.map((employee) => (
                   <tr key={employee._id}>
                     {canDeleteEmployee ? (
                       <td className="text-center">
@@ -957,6 +1167,192 @@ export default function EmployeeList() {
           canEditQr={canEditEmployee}
         />
       ) : null}
+    </div>
+  );
+}
+
+function EmployeeAdvancedFilters({ filters, options, onChange, onApply, onClear, hasFilters }) {
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      onApply();
+    }
+  };
+
+  const renderOptions = (rows = []) =>
+    rows.map((row) => (
+      <option key={row} value={row}>
+        {row}
+      </option>
+    ));
+
+  return (
+    <div
+      id="employee-advanced-filters"
+      className="employee-directory-advanced-filters mt-3"
+    >
+      <div className="employee-directory-advanced-filter-grid">
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Employee Code
+          </label>
+          <input
+            className="form-control form-control-sm"
+            placeholder="Code"
+            value={filters.code}
+            onChange={(event) => onChange("code", event.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Advanced filter by employee code"
+          />
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Employee Name / Email
+          </label>
+          <input
+            className="form-control form-control-sm"
+            placeholder="Name or email"
+            value={filters.nameEmail}
+            onChange={(event) => onChange("nameEmail", event.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Advanced filter by employee name or email"
+          />
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Mobile Number
+          </label>
+          <input
+            className="form-control form-control-sm"
+            placeholder="Mobile"
+            value={filters.mobile}
+            onChange={(event) => onChange("mobile", event.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Advanced filter by mobile number"
+          />
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Department
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.department}
+            onChange={(event) => onChange("department", event.target.value)}
+            aria-label="Advanced filter by department"
+          >
+            <option value="">All departments</option>
+            {renderOptions(options.departments)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Sub Department
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.subDepartment}
+            onChange={(event) => onChange("subDepartment", event.target.value)}
+            aria-label="Advanced filter by sub department"
+          >
+            <option value="">All sub departments</option>
+            {renderOptions(options.subDepartments)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Superior Employee
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.superiorEmployee}
+            onChange={(event) => onChange("superiorEmployee", event.target.value)}
+            aria-label="Advanced filter by superior employee"
+          >
+            <option value="">All superiors</option>
+            {renderOptions(options.superiorEmployees)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Site
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.site}
+            onChange={(event) => onChange("site", event.target.value)}
+            aria-label="Advanced filter by site"
+          >
+            <option value="">All sites</option>
+            {renderOptions(options.sites)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Sub Site
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.subSite}
+            onChange={(event) => onChange("subSite", event.target.value)}
+            aria-label="Advanced filter by sub site"
+          >
+            <option value="">All sub sites</option>
+            {renderOptions(options.subSites)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Designation
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.designation}
+            onChange={(event) => onChange("designation", event.target.value)}
+            aria-label="Advanced filter by designation"
+          >
+            <option value="">All designations</option>
+            {renderOptions(options.designations)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label fw-semibold small text-uppercase text-muted">
+            Status
+          </label>
+          <select
+            className="form-select form-select-sm"
+            value={filters.status}
+            onChange={(event) => onChange("status", event.target.value)}
+            aria-label="Advanced filter by status"
+          >
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="employee-directory-advanced-filter-actions">
+        <button type="button" className="btn btn-primary" onClick={onApply}>
+          Apply
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary"
+          onClick={onClear}
+          disabled={!hasFilters}
+        >
+          Clear Advanced
+        </button>
+      </div>
     </div>
   );
 }

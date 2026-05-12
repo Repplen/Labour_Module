@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import { usePermissions } from "../../context/usePermissions";
@@ -12,7 +12,6 @@ import {
   formatCurrentApproverLabel,
   formatDateTime,
   formatEmployeeLabel,
-  formatMarkValue,
   formatPriorityLabel,
   formatScheduleLabel,
   formatTaskFinalMarkLabel,
@@ -30,7 +29,123 @@ import {
   validateFile,
 } from "../../utils/fileValidation";
 
-const getChecklistSiteName = (site) => String(site?.name || "").trim();
+const getChecklistSiteName = (site) =>
+  String(typeof site === "string" ? site : site?.name || "").trim();
+
+const EMPTY_CHECKLIST_COLUMN_FILTERS = {
+  checklistNumber: "",
+  name: "",
+  sourceSite: "",
+  employee: "",
+  priority: "",
+  schedule: "",
+  startDate: "",
+  endDate: "",
+  nextTaskDate: "",
+  approverMapping: "",
+  dependency: "",
+  status: "",
+};
+
+const checklistDateInputFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const normalizeFilterText = (value) => String(value || "").trim().toLowerCase();
+
+const textIncludesFilter = (value, filterValue) => {
+  const normalizedFilter = normalizeFilterText(filterValue);
+  if (!normalizedFilter) return true;
+  return normalizeFilterText(value).includes(normalizedFilter);
+};
+
+const getDateFilterValue = (value) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = checklistDateInputFormatter
+    .formatToParts(date)
+    .reduce((accumulator, part) => {
+      if (part.type !== "literal") {
+        accumulator[part.type] = part.value;
+      }
+
+      return accumulator;
+    }, {});
+
+  return parts.year && parts.month && parts.day
+    ? `${parts.year}-${parts.month}-${parts.day}`
+    : "";
+};
+
+const getApproverMappingFilterLabel = (checklist) =>
+  String(checklist?.approvalHierarchy || "").toLowerCase() === "custom"
+    ? formatApprovalLabel(checklist)
+    : "Default";
+
+const hasChecklistColumnFilters = (filters = {}) =>
+  Object.values(filters).some((value) => String(value || "").trim());
+
+const getChecklistColumnFilterOptions = (rows = []) => {
+  const sourceSites = new Set();
+  const employees = new Set();
+  const approverMappings = new Set();
+
+  rows.forEach((row) => {
+    const sourceSite = getChecklistSiteName(row.checklistSourceSite);
+    const employee = formatEmployeeLabel(row.assignedToEmployee);
+    const approverMapping = getApproverMappingFilterLabel(row);
+
+    if (sourceSite) sourceSites.add(sourceSite);
+    if (employee && employee !== "-") employees.add(employee);
+    if (approverMapping && approverMapping !== "-") approverMappings.add(approverMapping);
+  });
+
+  const sortLabels = (left, right) =>
+    left.localeCompare(right, undefined, { sensitivity: "base" });
+
+  return {
+    sourceSites: [...sourceSites].sort(sortLabels),
+    employees: [...employees].sort(sortLabels),
+    approverMappings: [...approverMappings].sort(sortLabels),
+  };
+};
+
+const filterChecklistRowsByColumns = (rows = [], filters = {}) => {
+  if (!hasChecklistColumnFilters(filters)) return rows;
+
+  return rows.filter((row) => {
+    const priority = normalizeFilterText(row.priority);
+    const schedule = normalizeFilterText(row.scheduleType || row.repeatType);
+    const status = row.status ? "active" : "inactive";
+    const dependency = row.isDependentTask ? "yes" : "no";
+    const sourceSite = getChecklistSiteName(row.checklistSourceSite);
+    const employee = formatEmployeeLabel(row.assignedToEmployee);
+    const approverMapping = getApproverMappingFilterLabel(row);
+
+    return (
+      textIncludesFilter(row.checklistNumber, filters.checklistNumber) &&
+      textIncludesFilter(row.checklistName, filters.name) &&
+      (!filters.sourceSite ||
+        normalizeFilterText(sourceSite) === normalizeFilterText(filters.sourceSite)) &&
+      textIncludesFilter(employee, filters.employee) &&
+      (!filters.priority || priority === normalizeFilterText(filters.priority)) &&
+      (!filters.schedule || schedule === normalizeFilterText(filters.schedule)) &&
+      (!filters.startDate || getDateFilterValue(row.startDate) === filters.startDate) &&
+      (!filters.endDate || getDateFilterValue(row.endDate) === filters.endDate) &&
+      (!filters.nextTaskDate ||
+        getDateFilterValue(row.nextOccurrenceAt) === filters.nextTaskDate) &&
+      textIncludesFilter(approverMapping, filters.approverMapping) &&
+      (!filters.dependency || dependency === normalizeFilterText(filters.dependency)) &&
+      (!filters.status || status === normalizeFilterText(filters.status))
+    );
+  });
+};
 
 function ViewIcon() {
   return (
@@ -203,7 +318,19 @@ export default function ChecklistList() {
   const [statusMessage, setStatusMessage] = useState("");
   const [statusError, setStatusError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [columnFilters, setColumnFilters] = useState(EMPTY_CHECKLIST_COLUMN_FILTERS);
+  const [appliedColumnFilters, setAppliedColumnFilters] = useState(
+    EMPTY_CHECKLIST_COLUMN_FILTERS
+  );
   const importInputRef = useRef(null);
+
+  const filteredRows = useMemo(
+    () => filterChecklistRowsByColumns(rows, appliedColumnFilters),
+    [appliedColumnFilters, rows]
+  );
+  const columnFilterOptions = useMemo(() => getChecklistColumnFilterOptions(rows), [rows]);
+  const hasColumnFilters =
+    hasChecklistColumnFilters(columnFilters) || hasChecklistColumnFilters(appliedColumnFilters);
 
   useEffect(() => {
     const loadRows = async () => {
@@ -241,10 +368,10 @@ export default function ChecklistList() {
 
     setSelectedChecklistIds((currentValue) =>
       currentValue.filter((selectedId) =>
-        rows.some((row) => String(row._id) === String(selectedId))
+        filteredRows.some((row) => String(row._id) === String(selectedId))
       )
     );
-  }, [canManageChecklistMasters, rows]);
+  }, [canManageChecklistMasters, filteredRows]);
 
   const removeRowsFromState = (checklistIds) => {
     const normalizedIds = checklistIds.map((id) => String(id));
@@ -255,6 +382,22 @@ export default function ChecklistList() {
     setSelectedChecklistIds((currentValue) =>
       currentValue.filter((selectedId) => !normalizedIds.includes(String(selectedId)))
     );
+  };
+
+  const updateColumnFilter = (field, value) => {
+    setColumnFilters((currentValue) => ({
+      ...currentValue,
+      [field]: value,
+    }));
+  };
+
+  const applyColumnFilters = () => {
+    setAppliedColumnFilters(columnFilters);
+  };
+
+  const clearColumnFilters = () => {
+    setColumnFilters(EMPTY_CHECKLIST_COLUMN_FILTERS);
+    setAppliedColumnFilters(EMPTY_CHECKLIST_COLUMN_FILTERS);
   };
 
   const toggleChecklistSelection = (id) => {
@@ -505,6 +648,7 @@ export default function ChecklistList() {
     setSearch("");
     setStatus("");
     setScheduleType("");
+    clearColumnFilters();
   };
 
   return canManageChecklistMasters ? (
@@ -517,7 +661,7 @@ export default function ChecklistList() {
         onChange={importChecklistExcel}
       />
       <AdminChecklistMasterList
-        rows={rows}
+        rows={filteredRows}
         loading={loading}
         search={search}
         status={status}
@@ -525,6 +669,12 @@ export default function ChecklistList() {
         setSearch={setSearch}
         setStatus={setStatus}
         setScheduleType={setScheduleType}
+        columnFilters={columnFilters}
+        columnFilterOptions={columnFilterOptions}
+        updateColumnFilter={updateColumnFilter}
+        applyColumnFilters={applyColumnFilters}
+        clearColumnFilters={clearColumnFilters}
+        hasColumnFilters={hasColumnFilters}
         openChecklistStatusConfirmation={openChecklistStatusConfirmation}
         deleteChecklist={deleteChecklist}
         selectedChecklistIds={selectedChecklistIds}
@@ -592,6 +742,12 @@ function AdminChecklistMasterList({
   setSearch,
   setStatus,
   setScheduleType,
+  columnFilters,
+  columnFilterOptions,
+  updateColumnFilter,
+  applyColumnFilters,
+  clearColumnFilters,
+  hasColumnFilters,
   openChecklistStatusConfirmation,
   deleteChecklist,
   selectedChecklistIds,
@@ -620,7 +776,7 @@ function AdminChecklistMasterList({
     rows.every((row) => selectedChecklistIds.includes(String(row._id)));
   const activeCount = rows.filter((row) => row.status).length;
   const inactiveCount = rows.length - activeCount;
-  const hasFilters = Boolean(search.trim() || status || scheduleType);
+  const hasFilters = Boolean(search.trim() || status || scheduleType || hasColumnFilters);
 
   return (
     <div className="container-fluid mt-4 mb-5" data-testid="checklist-master-page">
@@ -713,7 +869,7 @@ function AdminChecklistMasterList({
           <div>
             <h6 className="mb-1">Filters</h6>
             <div className="form-help">
-              Narrow checklist masters by name, status, or schedule type.
+              Narrow checklist masters from the top controls or table headings.
             </div>
           </div>
 
@@ -767,7 +923,7 @@ function AdminChecklistMasterList({
       <div className="table-shell">
       <div className="table-responsive">
         <table
-          className="table table-bordered table-striped align-middle"
+          className="table table-bordered table-striped align-middle checklist-master-table"
           data-testid="checklist-table"
         >
           <thead className="table-dark">
@@ -788,9 +944,6 @@ function AdminChecklistMasterList({
               <th>Checklist Number</th>
               <th>Name</th>
               <th>Scoring</th>
-              <th>Base Mark</th>
-              <th>Delay Penalty / Day</th>
-              <th>Advance Bonus / Day</th>
               <th>Source Site</th>
               <th>Employee</th>
               <th>Priority</th>
@@ -803,11 +956,20 @@ function AdminChecklistMasterList({
               <th>Status</th>
               <th>Action</th>
             </tr>
+            <ChecklistColumnFilterRow
+              canDelete={canDelete}
+              filters={columnFilters}
+              options={columnFilterOptions}
+              onChange={updateColumnFilter}
+              onApply={applyColumnFilters}
+              onClear={clearColumnFilters}
+              hasFilters={hasColumnFilters}
+            />
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={canDelete ? "19" : "18"} className="text-center">
+                <td colSpan={canDelete ? "16" : "15"} className="text-center">
                   Loading checklist masters...
                 </td>
               </tr>
@@ -815,7 +977,7 @@ function AdminChecklistMasterList({
 
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={canDelete ? "19" : "18"} className="text-center">
+                <td colSpan={canDelete ? "16" : "15"} className="text-center">
                   No checklist masters found
                 </td>
               </tr>
@@ -840,9 +1002,6 @@ function AdminChecklistMasterList({
                   <td>{row.checklistNumber}</td>
                   <td className="fw-semibold">{row.checklistName}</td>
                   <td>{formatChecklistScoreLabel(row)}</td>
-                  <td>{row.enableMark ? formatMarkValue(row.baseMark) : "-"}</td>
-                  <td>{row.enableMark ? formatMarkValue(row.delayPenaltyPerDay) : "-"}</td>
-                  <td>{row.enableMark ? formatMarkValue(row.advanceBonusPerDay) : "-"}</td>
                   <td>{getChecklistSiteName(row.checklistSourceSite) || "-"}</td>
                   <td>{formatEmployeeLabel(row.assignedToEmployee)}</td>
                   <td>
@@ -860,11 +1019,7 @@ function AdminChecklistMasterList({
                     <div className="small text-muted">{row.endTime || "-"}</div>
                   </td>
                   <td>{formatDateTime(row.nextOccurrenceAt)}</td>
-                  <td>
-                    {String(row.approvalHierarchy || "").toLowerCase() === "custom"
-                      ? formatApprovalLabel(row)
-                      : "Default"}
-                  </td>
+                  <td>{getApproverMappingFilterLabel(row)}</td>
                   <td>
                     <div>{formatChecklistDependencyLabel(row)}</div>
                     {row.isDependentTask ? (
@@ -934,6 +1089,201 @@ function AdminChecklistMasterList({
       </div>
       </div>
     </div>
+  );
+}
+
+function ChecklistColumnFilterRow({
+  canDelete,
+  filters,
+  options,
+  onChange,
+  onApply,
+  onClear,
+  hasFilters,
+}) {
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      onApply();
+    }
+  };
+
+  return (
+    <tr className="checklist-table-filter-row">
+      {canDelete ? <th aria-label="Selection filter" /> : null}
+      <th aria-label="Serial number filter" />
+      <th>
+        <input
+          type="text"
+          className="form-control form-control-sm checklist-table-filter-control"
+          placeholder="Number"
+          value={filters.checklistNumber}
+          onChange={(event) => onChange("checklistNumber", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Filter by checklist number"
+        />
+      </th>
+      <th>
+        <input
+          type="text"
+          className="form-control form-control-sm checklist-table-filter-control"
+          placeholder="Name"
+          value={filters.name}
+          onChange={(event) => onChange("name", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Filter by checklist name"
+        />
+      </th>
+      <th aria-label="Scoring filter" />
+      <th>
+        <select
+          className="form-select form-select-sm checklist-table-filter-control"
+          value={filters.sourceSite}
+          onChange={(event) => onChange("sourceSite", event.target.value)}
+          aria-label="Filter by source site"
+        >
+          <option value="">All</option>
+          {options.sourceSites.map((sourceSite) => (
+            <option key={sourceSite} value={sourceSite}>
+              {sourceSite}
+            </option>
+          ))}
+        </select>
+      </th>
+      <th>
+        <input
+          type="search"
+          list="checklist-master-employee-filter-options"
+          className="form-control form-control-sm checklist-table-filter-control"
+          placeholder="Employee"
+          value={filters.employee}
+          onChange={(event) => onChange("employee", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Filter by employee"
+        />
+        <datalist id="checklist-master-employee-filter-options">
+          {options.employees.map((employee) => (
+            <option key={employee} value={employee} />
+          ))}
+        </datalist>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm checklist-table-filter-control"
+          value={filters.priority}
+          onChange={(event) => onChange("priority", event.target.value)}
+          aria-label="Filter by priority"
+        >
+          <option value="">All</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm checklist-table-filter-control"
+          value={filters.schedule}
+          onChange={(event) => onChange("schedule", event.target.value)}
+          aria-label="Filter by schedule"
+        >
+          <option value="">All</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+          <option value="custom">Custom</option>
+        </select>
+      </th>
+      <th>
+        <input
+          type="date"
+          className="form-control form-control-sm checklist-table-filter-control"
+          value={filters.startDate}
+          onChange={(event) => onChange("startDate", event.target.value)}
+          aria-label="Filter by start date"
+        />
+      </th>
+      <th>
+        <input
+          type="date"
+          className="form-control form-control-sm checklist-table-filter-control"
+          value={filters.endDate}
+          onChange={(event) => onChange("endDate", event.target.value)}
+          aria-label="Filter by end date"
+        />
+      </th>
+      <th>
+        <input
+          type="date"
+          className="form-control form-control-sm checklist-table-filter-control"
+          value={filters.nextTaskDate}
+          onChange={(event) => onChange("nextTaskDate", event.target.value)}
+          aria-label="Filter by next task date"
+        />
+      </th>
+      <th>
+        <input
+          type="search"
+          list="checklist-master-approver-filter-options"
+          className="form-control form-control-sm checklist-table-filter-control"
+          placeholder="Approver"
+          value={filters.approverMapping}
+          onChange={(event) => onChange("approverMapping", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Filter by approver mapping"
+        />
+        <datalist id="checklist-master-approver-filter-options">
+          {options.approverMappings.map((approverMapping) => (
+            <option key={approverMapping} value={approverMapping} />
+          ))}
+        </datalist>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm checklist-table-filter-control"
+          value={filters.dependency}
+          onChange={(event) => onChange("dependency", event.target.value)}
+          aria-label="Filter by dependency"
+        >
+          <option value="">All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm checklist-table-filter-control"
+          value={filters.status}
+          onChange={(event) => onChange("status", event.target.value)}
+          aria-label="Filter by status"
+        >
+          <option value="">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </th>
+      <th>
+        <div className="checklist-table-filter-actions">
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={onApply}
+            aria-label="Apply table filters"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-light"
+            onClick={onClear}
+            disabled={!hasFilters}
+            aria-label="Clear table filters"
+          >
+            Clear
+          </button>
+        </div>
+      </th>
+    </tr>
   );
 }
 
