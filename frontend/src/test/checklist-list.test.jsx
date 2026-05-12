@@ -119,6 +119,11 @@ describe("checklist list", () => {
 
     expect(await screen.findByText("Daily Safety Walk")).toBeInTheDocument();
     expect(screen.getByText("Weekly Fire Audit")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/filter by schedule/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
+
+    expect(screen.getByRole("button", { name: /hide filters/i })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/filter by schedule/i), {
       target: { value: "daily" },

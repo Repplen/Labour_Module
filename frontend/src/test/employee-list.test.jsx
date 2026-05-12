@@ -25,7 +25,7 @@ describe("employee list", () => {
     vi.clearAllMocks();
   });
 
-  test("toggles and applies advanced employee filters together", async () => {
+  test("toggles and applies employee table-heading filters together", async () => {
     api.get.mockResolvedValue({
       data: [
         {
@@ -67,18 +67,19 @@ describe("employee list", () => {
 
     expect(await screen.findByText("Karthick")).toBeInTheDocument();
     expect(screen.getByText("Bharathi")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/table filter by department/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
 
     expect(screen.getByRole("button", { name: /hide filters/i })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/advanced filter by department/i), {
+    fireEvent.change(screen.getByLabelText(/table filter by department/i), {
       target: { value: "Admin" },
     });
-    fireEvent.change(screen.getByLabelText(/advanced filter by site/i), {
+    fireEvent.change(screen.getByLabelText(/table filter by site/i), {
       target: { value: "JRS - Head Office" },
     });
-    fireEvent.change(screen.getByLabelText(/advanced filter by status/i), {
+    fireEvent.change(screen.getByLabelText(/table filter by status/i), {
       target: { value: "active" },
     });
     fireEvent.click(screen.getByRole("button", { name: /^apply$/i }));

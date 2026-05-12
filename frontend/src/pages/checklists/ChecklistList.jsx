@@ -318,6 +318,7 @@ export default function ChecklistList() {
   const [statusMessage, setStatusMessage] = useState("");
   const [statusError, setStatusError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [columnFiltersVisible, setColumnFiltersVisible] = useState(false);
   const [columnFilters, setColumnFilters] = useState(EMPTY_CHECKLIST_COLUMN_FILTERS);
   const [appliedColumnFilters, setAppliedColumnFilters] = useState(
     EMPTY_CHECKLIST_COLUMN_FILTERS
@@ -669,6 +670,8 @@ export default function ChecklistList() {
         setSearch={setSearch}
         setStatus={setStatus}
         setScheduleType={setScheduleType}
+        columnFiltersVisible={columnFiltersVisible}
+        setColumnFiltersVisible={setColumnFiltersVisible}
         columnFilters={columnFilters}
         columnFilterOptions={columnFilterOptions}
         updateColumnFilter={updateColumnFilter}
@@ -742,6 +745,8 @@ function AdminChecklistMasterList({
   setSearch,
   setStatus,
   setScheduleType,
+  columnFiltersVisible,
+  setColumnFiltersVisible,
   columnFilters,
   columnFilterOptions,
   updateColumnFilter,
@@ -869,18 +874,29 @@ function AdminChecklistMasterList({
           <div>
             <h6 className="mb-1">Filters</h6>
             <div className="form-help">
-              Narrow checklist masters from the top controls or table headings.
+              Click Filter to enable table-heading filters for checklist masters.
             </div>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-outline-secondary"
-            onClick={clearFilters}
-            disabled={!hasFilters}
-          >
-            Clear Filters
-          </button>
+          <div className="d-flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`btn ${columnFiltersVisible ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setColumnFiltersVisible((currentValue) => !currentValue)}
+              aria-expanded={columnFiltersVisible}
+              aria-controls="checklist-table-heading-filters"
+            >
+              {columnFiltersVisible ? "Hide Filters" : "Filter"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={clearFilters}
+              disabled={!hasFilters}
+            >
+              Clear Filters
+            </button>
+          </div>
         </div>
 
         <div className="row g-2 mt-1">
@@ -956,15 +972,17 @@ function AdminChecklistMasterList({
               <th>Status</th>
               <th>Action</th>
             </tr>
-            <ChecklistColumnFilterRow
-              canDelete={canDelete}
-              filters={columnFilters}
-              options={columnFilterOptions}
-              onChange={updateColumnFilter}
-              onApply={applyColumnFilters}
-              onClear={clearColumnFilters}
-              hasFilters={hasColumnFilters}
-            />
+            {columnFiltersVisible ? (
+              <ChecklistColumnFilterRow
+                canDelete={canDelete}
+                filters={columnFilters}
+                options={columnFilterOptions}
+                onChange={updateColumnFilter}
+                onApply={applyColumnFilters}
+                onClear={clearColumnFilters}
+                hasFilters={hasColumnFilters}
+              />
+            ) : null}
           </thead>
           <tbody>
             {loading && (
@@ -1108,7 +1126,7 @@ function ChecklistColumnFilterRow({
   };
 
   return (
-    <tr className="checklist-table-filter-row">
+    <tr className="checklist-table-filter-row" id="checklist-table-heading-filters">
       {canDelete ? <th aria-label="Selection filter" /> : null}
       <th aria-label="Serial number filter" />
       <th>

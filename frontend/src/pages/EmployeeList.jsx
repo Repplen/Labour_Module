@@ -702,7 +702,7 @@ export default function EmployeeList() {
     department ? "Department focus applied" : "",
     search.trim() ? `Search: ${search.trim()}` : "",
     getStatusFilterLabel(status),
-    hasEmployeeAdvancedFilters(appliedAdvancedFilters) ? "Advanced filters applied" : "",
+    hasEmployeeAdvancedFilters(appliedAdvancedFilters) ? "Table filters applied" : "",
   ].filter(Boolean);
 
   if (canDeleteEmployee) {
@@ -788,7 +788,7 @@ export default function EmployeeList() {
           <div>
             <h6 className="mb-1">Filters</h6>
             <div className="form-help">
-              Narrow the list by keyword, status, or advanced employee mapping filters.
+              Click Filter to enable table-heading filters for employee mappings.
             </div>
           </div>
 
@@ -800,7 +800,7 @@ export default function EmployeeList() {
               }`}
               onClick={() => setAdvancedFiltersVisible((currentValue) => !currentValue)}
               aria-expanded={advancedFiltersVisible}
-              aria-controls="employee-advanced-filters"
+              aria-controls="employee-table-heading-filters"
             >
               {advancedFiltersVisible ? "Hide Filters" : "Filter"}
             </button>
@@ -849,24 +849,13 @@ export default function EmployeeList() {
           </div>
         </div>
 
-        {advancedFiltersVisible ? (
-          <EmployeeAdvancedFilters
-            filters={advancedFilters}
-            options={advancedFilterOptions}
-            onChange={updateAdvancedFilter}
-            onApply={applyAdvancedFilters}
-            onClear={clearAdvancedFilters}
-            hasFilters={hasAdvancedFilters}
-          />
-        ) : null}
-
         {department ? (
           <div className="alert alert-info py-2 mt-3 mb-0">
             This list is currently filtered from a dashboard selection.
           </div>
         ) : hasFilters ? (
           <div className="form-help mt-3">
-            Top filters update automatically. Advanced filters update after Apply.
+            Top filters update automatically. Table-heading filters update after Apply.
           </div>
         ) : null}
       </div>
@@ -903,6 +892,17 @@ export default function EmployeeList() {
                 <th>Status</th>
                 <th width="270">Actions</th>
               </tr>
+              {advancedFiltersVisible ? (
+                <EmployeeTableFilterRow
+                  canDelete={canDeleteEmployee}
+                  filters={advancedFilters}
+                  options={advancedFilterOptions}
+                  onChange={updateAdvancedFilter}
+                  onApply={applyAdvancedFilters}
+                  onClear={clearAdvancedFilters}
+                  hasFilters={hasAdvancedFilters}
+                />
+              ) : null}
             </thead>
 
             <tbody>
@@ -1171,7 +1171,15 @@ export default function EmployeeList() {
   );
 }
 
-function EmployeeAdvancedFilters({ filters, options, onChange, onApply, onClear, hasFilters }) {
+function EmployeeTableFilterRow({
+  canDelete,
+  filters,
+  options,
+  onChange,
+  onApply,
+  onClear,
+  hasFilters,
+}) {
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
       onApply();
@@ -1186,174 +1194,123 @@ function EmployeeAdvancedFilters({ filters, options, onChange, onApply, onClear,
     ));
 
   return (
-    <div
-      id="employee-advanced-filters"
-      className="employee-directory-advanced-filters mt-3"
-    >
-      <div className="employee-directory-advanced-filter-grid">
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Employee Code
-          </label>
-          <input
-            className="form-control form-control-sm"
-            placeholder="Code"
-            value={filters.code}
-            onChange={(event) => onChange("code", event.target.value)}
-            onKeyDown={handleKeyDown}
-            aria-label="Advanced filter by employee code"
-          />
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Employee Name / Email
-          </label>
-          <input
-            className="form-control form-control-sm"
-            placeholder="Name or email"
-            value={filters.nameEmail}
-            onChange={(event) => onChange("nameEmail", event.target.value)}
-            onKeyDown={handleKeyDown}
-            aria-label="Advanced filter by employee name or email"
-          />
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Mobile Number
-          </label>
-          <input
-            className="form-control form-control-sm"
-            placeholder="Mobile"
-            value={filters.mobile}
-            onChange={(event) => onChange("mobile", event.target.value)}
-            onKeyDown={handleKeyDown}
-            aria-label="Advanced filter by mobile number"
-          />
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Department
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.department}
-            onChange={(event) => onChange("department", event.target.value)}
-            aria-label="Advanced filter by department"
-          >
-            <option value="">All departments</option>
-            {renderOptions(options.departments)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Sub Department
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.subDepartment}
-            onChange={(event) => onChange("subDepartment", event.target.value)}
-            aria-label="Advanced filter by sub department"
-          >
-            <option value="">All sub departments</option>
-            {renderOptions(options.subDepartments)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Superior Employee
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.superiorEmployee}
-            onChange={(event) => onChange("superiorEmployee", event.target.value)}
-            aria-label="Advanced filter by superior employee"
-          >
-            <option value="">All superiors</option>
-            {renderOptions(options.superiorEmployees)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Site
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.site}
-            onChange={(event) => onChange("site", event.target.value)}
-            aria-label="Advanced filter by site"
-          >
-            <option value="">All sites</option>
-            {renderOptions(options.sites)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Sub Site
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.subSite}
-            onChange={(event) => onChange("subSite", event.target.value)}
-            aria-label="Advanced filter by sub site"
-          >
-            <option value="">All sub sites</option>
-            {renderOptions(options.subSites)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Designation
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.designation}
-            onChange={(event) => onChange("designation", event.target.value)}
-            aria-label="Advanced filter by designation"
-          >
-            <option value="">All designations</option>
-            {renderOptions(options.designations)}
-          </select>
-        </div>
-
-        <div>
-          <label className="form-label fw-semibold small text-uppercase text-muted">
-            Status
-          </label>
-          <select
-            className="form-select form-select-sm"
-            value={filters.status}
-            onChange={(event) => onChange("status", event.target.value)}
-            aria-label="Advanced filter by status"
-          >
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="employee-directory-advanced-filter-actions">
-        <button type="button" className="btn btn-primary" onClick={onApply}>
-          Apply
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary"
-          onClick={onClear}
-          disabled={!hasFilters}
+    <tr className="employee-directory-table-filter-row" id="employee-table-heading-filters">
+      {canDelete ? <th aria-label="Selection filter" /> : null}
+      <th aria-label="Photo filter" />
+      <th>
+        <input
+          className="form-control form-control-sm employee-directory-table-filter-control"
+          placeholder="Code"
+          value={filters.code}
+          onChange={(event) => onChange("code", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Table filter by employee code"
+        />
+      </th>
+      <th>
+        <input
+          className="form-control form-control-sm employee-directory-table-filter-control"
+          placeholder="Name / email"
+          value={filters.nameEmail}
+          onChange={(event) => onChange("nameEmail", event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label="Table filter by employee name or email"
+        />
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.department}
+          onChange={(event) => onChange("department", event.target.value)}
+          aria-label="Table filter by department"
         >
-          Clear Advanced
-        </button>
-      </div>
-    </div>
+          <option value="">All</option>
+          {renderOptions(options.departments)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.subDepartment}
+          onChange={(event) => onChange("subDepartment", event.target.value)}
+          aria-label="Table filter by sub department"
+        >
+          <option value="">All</option>
+          {renderOptions(options.subDepartments)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.superiorEmployee}
+          onChange={(event) => onChange("superiorEmployee", event.target.value)}
+          aria-label="Table filter by superior employee"
+        >
+          <option value="">All</option>
+          {renderOptions(options.superiorEmployees)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.site}
+          onChange={(event) => onChange("site", event.target.value)}
+          aria-label="Table filter by site"
+        >
+          <option value="">All</option>
+          {renderOptions(options.sites)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.subSite}
+          onChange={(event) => onChange("subSite", event.target.value)}
+          aria-label="Table filter by sub site"
+        >
+          <option value="">All</option>
+          {renderOptions(options.subSites)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.designation}
+          onChange={(event) => onChange("designation", event.target.value)}
+          aria-label="Table filter by designation"
+        >
+          <option value="">All</option>
+          {renderOptions(options.designations)}
+        </select>
+      </th>
+      <th>
+        <select
+          className="form-select form-select-sm employee-directory-table-filter-control"
+          value={filters.status}
+          onChange={(event) => onChange("status", event.target.value)}
+          aria-label="Table filter by status"
+        >
+          <option value="">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </th>
+      <th>
+        <div className="employee-directory-table-filter-actions">
+          <button type="button" className="btn btn-sm btn-primary" onClick={onApply}>
+            Apply
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-light"
+            onClick={onClear}
+            disabled={!hasFilters}
+          >
+            Clear
+          </button>
+        </div>
+      </th>
+    </tr>
   );
 }
 
