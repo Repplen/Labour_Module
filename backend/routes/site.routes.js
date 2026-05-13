@@ -8,6 +8,33 @@ const { buildSiteScopeFilter } = require("../services/accessScope.service");
 
 const MAX_SUB_LEVELS = 4;
 const normalizeName = (value) => String(value || "").trim();
+const duplicateSiteMessage = "Duplicate site data found";
+const duplicateSiteNameError = {
+  field: "name",
+  message: "This site name already exists.",
+};
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sendDuplicateSiteResponse = (res) =>
+  res.status(409).json({
+    success: false,
+    message: duplicateSiteMessage,
+    errors: [duplicateSiteNameError],
+  });
+
+const findDuplicateSite = (name, currentSiteId = null) => {
+  const filter = {
+    name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+  };
+
+  if (currentSiteId) {
+    filter._id = { $ne: currentSiteId };
+  }
+
+  return Site.exists(filter);
+};
+
 const parseNameList = (value) => {
   const raw =
     Array.isArray(value)
@@ -214,10 +241,8 @@ router.post("/", auth, requirePermission("site_master", "add"), async (req, res)
     }
 
     const siteName = names[0];
-    const existingSite = await Site.findOne({ name: siteName }, "_id");
-    if (existingSite) {
-      return res.status(409).json({ message: "Site already exists" });
-    }
+    const duplicateSite = await findDuplicateSite(siteName);
+    if (duplicateSite) return sendDuplicateSiteResponse(res);
 
     const created = await Site.create({
       companyName,
@@ -228,7 +253,7 @@ router.post("/", auth, requirePermission("site_master", "add"), async (req, res)
     res.status(201).json(created);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Site already exists" });
+      return sendDuplicateSiteResponse(res);
     }
     res.status(500).json({ message: "Failed to create site" });
   }
@@ -265,6 +290,9 @@ router.put("/:id", auth, requirePermission("site_master", "edit"), async (req, r
       return res.status(400).json({ message: "Selected company is invalid" });
     }
 
+    const duplicateSite = await findDuplicateSite(name, req.params.id);
+    if (duplicateSite) return sendDuplicateSiteResponse(res);
+
     const updated = await Site.findOneAndUpdate(
       { _id: req.params.id, isActive: { $ne: false } },
       { companyName, name, headNames, siteLeadNames },
@@ -275,7 +303,7 @@ router.put("/:id", auth, requirePermission("site_master", "edit"), async (req, r
     res.json(updated);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Site already exists" });
+      return sendDuplicateSiteResponse(res);
     }
     res.status(500).json({ message: "Failed to update site" });
   }

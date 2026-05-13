@@ -55,6 +55,7 @@ describe("employee.controller duplicate contact validation", () => {
   test("rejects create when email and mobile already exist", async () => {
     mockDuplicateRows([
       {
+        employeeCode: "EMP-2",
         email: "admin@test.com",
         mobile: "9876543210",
       },
@@ -80,6 +81,10 @@ describe("employee.controller duplicate contact validation", () => {
       success: false,
       message: "Duplicate employee data found",
       errors: [
+        {
+          field: "employeeCode",
+          message: "This employee code already exists.",
+        },
         {
           field: "email",
           message: "This email ID already exists.",
@@ -118,7 +123,7 @@ describe("employee.controller duplicate contact validation", () => {
       expect.objectContaining({
         _id: { $ne: "current-employee-id" },
       }),
-      "email mobile"
+      "employeeCode email mobile"
     );
     expect(response.status).toHaveBeenCalledWith(409);
     expect(Employee.findByIdAndUpdate).not.toHaveBeenCalled();

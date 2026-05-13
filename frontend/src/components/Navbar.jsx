@@ -162,7 +162,12 @@ export default function Navbar() {
         can("checklist_master", "view")
           ? { to: "/checklists", label: "Checklist Master" }
           : !can("checklist_master", "view") && can("assigned_checklists", "view")
-          ? { to: "/checklists", label: "Assigned Checklist" }
+          ? { to: "/your-checklist", label: "Your Checklist" }
+          : null,
+        can("checklist_master", "view")
+          ? null
+          : !can("checklist_master", "view") && can("assigned_checklists", "view")
+          ? { to: "/checklists", label: "Tasks" }
           : null,
         can("checklist_master", "view") ? { to: "/checklists/tasks", label: "Tasks" } : null,
         can("poll_master", "view")

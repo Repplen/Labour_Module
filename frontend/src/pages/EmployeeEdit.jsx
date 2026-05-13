@@ -177,21 +177,26 @@ export default function EmployeeEdit() {
       getEmployeeDuplicateErrors(
         employeeRows,
         {
+          employeeCode: form.employeeCode,
           email: form.email,
           mobile: form.mobile,
         },
         id
       ),
-    [employeeRows, form.email, form.mobile, id]
+    [employeeRows, form.employeeCode, form.email, form.mobile, id]
   );
   const duplicateErrors = useMemo(
     () => ({
+      employeeCode:
+        clientDuplicateErrors.employeeCode || serverDuplicateErrors.employeeCode || "",
       email: clientDuplicateErrors.email || serverDuplicateErrors.email || "",
       mobile: clientDuplicateErrors.mobile || serverDuplicateErrors.mobile || "",
     }),
     [clientDuplicateErrors, serverDuplicateErrors]
   );
-  const hasDuplicateErrors = Boolean(duplicateErrors.email || duplicateErrors.mobile);
+  const hasDuplicateErrors = Boolean(
+    duplicateErrors.employeeCode || duplicateErrors.email || duplicateErrors.mobile
+  );
 
   const loadAll = useCallback(async () => {
     try {
@@ -257,7 +262,7 @@ export default function EmployeeEdit() {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
 
-    if (name === "email" || name === "mobile") {
+    if (name === "employeeCode" || name === "email" || name === "mobile") {
       setServerDuplicateErrors((prev) => {
         if (!prev[name]) return prev;
         const nextErrors = { ...prev };
@@ -374,7 +379,11 @@ export default function EmployeeEdit() {
       console.error(err);
       const apiDuplicateErrors = getApiDuplicateEmployeeErrors(err);
 
-      if (apiDuplicateErrors.email || apiDuplicateErrors.mobile) {
+      if (
+        apiDuplicateErrors.employeeCode ||
+        apiDuplicateErrors.email ||
+        apiDuplicateErrors.mobile
+      ) {
         setServerDuplicateErrors(apiDuplicateErrors);
         return;
       }
@@ -428,13 +437,29 @@ export default function EmployeeEdit() {
 
               <label className="form-label">Employee Code *</label>
               <input
-                className="form-control mb-3"
+                className={`form-control${
+                  duplicateErrors.employeeCode ? " is-invalid" : " mb-3"
+                }`}
                 name="employeeCode"
                 value={form.employeeCode}
                 onChange={handleChange}
                 placeholder="Employee Code"
+                aria-invalid={duplicateErrors.employeeCode ? "true" : "false"}
+                aria-describedby={
+                  duplicateErrors.employeeCode
+                    ? "employee-code-duplicate-error"
+                    : undefined
+                }
                 required
               />
+              {duplicateErrors.employeeCode ? (
+                <div
+                  className="invalid-feedback d-block mb-3"
+                  id="employee-code-duplicate-error"
+                >
+                  {duplicateErrors.employeeCode}
+                </div>
+              ) : null}
 
               <label className="form-label">Employee Name *</label>
               <input

@@ -70,6 +70,70 @@ const renderTaskView = () =>
     </MemoryRouter>
   );
 
+describe("checklist task attachments", () => {
+  beforeEach(() => {
+    localStorage.setItem("user", JSON.stringify({ id: "employee-1", role: "employee" }));
+
+    api.get.mockResolvedValue({ data: buildTask() });
+    api.post.mockResolvedValue({ data: {} });
+
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  test("adds files from multiple selections before submitting the task", async () => {
+    renderTaskView();
+
+    const attachmentInput = await screen.findByLabelText(/^attachments$/i);
+    const safetyReport = new File(["report"], "safety-report.pdf", {
+      type: "application/pdf",
+    });
+    const sitePhoto = new File(["photo"], "site-photo.png", {
+      type: "image/png",
+    });
+
+    fireEvent.change(attachmentInput, { target: { files: [safetyReport] } });
+    fireEvent.change(attachmentInput, { target: { files: [sitePhoto] } });
+
+    expect(screen.getByText("safety-report.pdf")).toBeInTheDocument();
+    expect(screen.getByText("site-photo.png")).toBeInTheDocument();
+
+    fireEvent.change(await screen.findByPlaceholderText(/enter the required answer or remark/i), {
+      target: { value: "Checked and safe" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        "/checklists/tasks/task-1/submit",
+        expect.any(FormData),
+        expect.objectContaining({
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      );
+    });
+
+    const submittedPayload = api.post.mock.calls[0][1];
+    const submittedAttachments = submittedPayload.getAll("attachments");
+
+    expect(submittedAttachments.map((file) => file.name)).toEqual([
+      "safety-report.pdf",
+      "site-photo.png",
+    ]);
+  });
+});
+
 describe("checklist task voice recording", () => {
   beforeEach(() => {
     localStorage.setItem("user", JSON.stringify({ id: "employee-1", role: "employee" }));

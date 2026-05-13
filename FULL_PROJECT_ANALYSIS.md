@@ -1,9 +1,9 @@
 # Full Project Analysis Report
 
-Generated on: May 5, 2026
+Generated on: May 13, 2026
 Analysis type: Static codebase review plus local verification
-Workspace: `c:\Users\REPPLEN\Desktop\Checklist test file\Employee_app_copy`
-Status note: This report reflects the current local project state after the May 4 auth, checklist setup, and checklist approval updates. The worktree contains uncommitted application and test changes; local test, lint, and production build verification are passing after a one-line lint cleanup in `ChecklistCreate.jsx`.
+Workspace: `e:\Github file 3\Checklist`
+Status note: This report reflects the current local project state after the May 13 checklist task, employee checklist, searchable selector, and attachment usability updates. The worktree contains uncommitted application, styling, test, and local environment changes. Local lint, test, and production build verification are passing as of May 13, 2026.
 
 ## 1. Executive Summary
 
@@ -11,34 +11,51 @@ This project is a full employee operations platform built with React, Vite, Expr
 
 The project is now in a stronger internal-production posture than the earlier April reports. It has environment validation, security middleware, explicit CORS configuration, validation middleware, reusable upload handling, structured request logging, tests, deployment notes, and a broad permission model. Recent work also improved operational safety around status changes and poll scheduling.
 
-The May 4 update is focused on access correctness and checklist setup efficiency. It filters inactive admin users out of the user listing, makes user edit validation safer for optional blank ObjectId fields, consolidates Checklist Create setup loading into one scoped backend endpoint, and narrows checklist approval/rejection to Main Admin reviewers.
+The May 13 update is focused on employee-facing checklist access and checklist task usability. It adds a dedicated employee "Your Checklist" page, introduces a separate backend checklist-task route/controller for that page, improves checklist setup dropdowns with searchable selectors, and makes task attachments additive/removable instead of replacing prior selections.
 
 Current assessment:
 
 - Product coverage: high
 - Backend architecture: good, with several large controller/service hotspots
-- Frontend architecture: good enough for current scale, with some large pages/CSS still needing decomposition
+- Frontend architecture: good enough for current scale, with route chunking already in place but some large pages/CSS still needing decomposition
 - Security posture: improved, with remaining token-storage and upload-access considerations
 - Validation posture: improved through Zod validators and controller-level checks
-- Testing posture: expanded and passing, but still not deep enough for full production confidence
+- Testing posture: expanded and passing, but still needs Mongo-backed integration and browser E2E coverage for full production confidence
 - Production readiness: good for controlled internal deployment, with clear hardening work remaining before broader exposure
 
-## 2. Latest Updates As Of May 4, 2026
+## 2. Latest Updates As Of May 13, 2026
 
-Current May 4 functional updates now present in the local workspace:
+Current May 13 functional updates now present in the local workspace:
 
-- Admin user listing now excludes inactive users by querying `isActive: { $ne: false }`.
-- User update validation now accepts blank optional ObjectId fields for `siteId`, `site`, and `roleId`.
+- New backend checklist task module added through `backend/controllers/checklistTask.controller.js` and `backend/routes/checklistTask.routes.js`.
+- Express now mounts the new checklist task API at `/api/checklist-tasks`.
+- New employee endpoint `GET /api/checklist-tasks/your-checklist` returns checklist task rows for the authenticated employee only.
+- The new endpoint supports search, status, schedule type, and date-range filters.
+- The endpoint maps task data into a compact response shape with checklist number, checklist name, occurrence start, end time, schedule details, and status.
+- New frontend page `frontend/src/pages/checklists/YourChecklist.jsx` shows assigned checklist tasks with summary counts, filters, a desktop table, and mobile cards.
+- App routing now exposes `/your-checklist` behind `assigned_checklists:view` permission.
+- Navbar now sends assigned-checklist users to "Your Checklist" and separates the task list link as "Tasks".
+- Permission catalog display name for `assigned_checklists` is now `Tasks`.
+- Checklist Create now uses a reusable `SearchableSelect` component for assigned site, assigned employee, checklist source site, and previous/dependency checklist selection.
+- Checklist task submission attachments are now accumulated across multiple file picker selections instead of being replaced each time.
+- Checklist task attachments can be removed individually or cleared before submission.
+- Checklist task submission now enforces a maximum of 10 total attachments, including the recorded voice file.
+- A frontend regression test now covers adding files across multiple selections and submitting both attachments.
+- CSS was extended for searchable selects, the Your Checklist mobile cards, and the improved task attachment picker.
+
+Earlier May 4 functional updates retained in the codebase:
+
+- Admin user listing excludes inactive users by querying `isActive: { $ne: false }`.
+- User update validation accepts blank optional ObjectId fields for `siteId`, `site`, and `roleId`.
 - Users Admin edit flow no longer sends an empty password unless a new password is entered.
 - Users Admin no longer sends an empty admin `siteId` during admin edits.
-- Checklist Create now loads employees, departments, sites, and dependency checklists through one new `/checklists/setup-data` endpoint.
-- The new checklist setup endpoint applies employee, department, site, and checklist master scope filters before returning setup data.
-- Checklist setup employee rows now include richer department and sub-department display details.
-- Checklist approval/rejection is now restricted to Main Admin reviewers.
+- Checklist Create loads employees, departments, sites, and dependency checklists through `/checklists/setup-data`.
+- The checklist setup endpoint applies employee, department, site, and checklist master scope filters before returning setup data.
+- Checklist setup employee rows include richer department and sub-department display details.
+- Checklist approval/rejection is restricted to Main Admin reviewers.
 - Checklist approval request notifications are created only for active Main Admin reviewers who can approve or reject Checklist Master requests.
 - Pending checklist review notifications are filled in for eligible reviewers when notifications are requested.
-- Backend tests now cover active-user listing, optional blank ObjectId auth validation, and checklist route precedence for `/setup-data`.
-- One frontend lint issue introduced by the permission update was fixed by removing an unused `can` binding from `ChecklistCreate.jsx`.
+- Backend tests cover active-user listing, optional blank ObjectId auth validation, and checklist route precedence for `/setup-data`.
 
 Earlier May 2 functional updates retained in the codebase:
 
@@ -55,19 +72,19 @@ Earlier May 2 functional updates retained in the codebase:
 - Poll reports now include poll date-time window and poll status.
 - Poll notifications are released when a poll becomes active, with reminder logic still based on the end date-time window.
 
-Together, these updates improve data safety, access correctness, and checklist setup performance while keeping the previous Employee Master, Checklist Master, and Polling System safeguards intact.
+Together, these updates improve data safety, access correctness, checklist setup performance, and employee checklist task usability while keeping the previous Employee Master, Checklist Master, and Polling System safeguards intact.
 
 ## 3. Current Repository Snapshot
 
 Fresh counts from the current workspace:
 
-- Project files tracked by `rg --files`: 237
-- Frontend source files under `frontend/src`: 102
-- Backend route files: 18
-- Backend controllers: 14
+- Project files tracked by `rg --files`: 273
+- Frontend source files under `frontend/src`: 113
+- Backend route files: 19
+- Backend controllers: 15
 - Backend models: 30
-- Backend top-level test files: 10
-- Frontend test/setup files: 8
+- Backend top-level test files: 12
+- Frontend test/setup files: 12
 
 Package layout:
 
@@ -78,11 +95,13 @@ Package layout:
 Repo hygiene status:
 
 - `.gitignore` excludes dependency folders, build output, coverage, env files, uploads, backend logs, and generic log files.
+- `backend/.env` is currently tracked despite the ignore rule, so changes to that file require extra care.
 - Runtime uploads and backend logs are ignored.
 - `.env.example`, `backend/.env.example`, and `frontend/.env.example` exist for environment onboarding.
-- `git status --short` is not clean. Current local changes are concentrated in auth, checklist setup/approval, and related tests.
-- Modified tracked files: `backend/controllers/auth.controller.js`, `backend/controllers/checklist.controller.js`, `backend/routes/checklist.routes.js`, `backend/tests/auth.controller.test.js`, `backend/validators/auth.validator.js`, `backend/validators/common.js`, `frontend/src/pages/UsersAdmin.jsx`, `frontend/src/pages/checklists/ChecklistAdminApprovals.jsx`, and `frontend/src/pages/checklists/ChecklistCreate.jsx`.
-- New untracked test files: `backend/tests/auth.validator.test.js` and `backend/tests/checklist.routes.test.js`.
+- `git status --short` is not clean. Current local changes are concentrated in checklist task routing, employee checklist UX, checklist setup selectors, attachment handling, app navigation, styling, and tests.
+- Modified tracked files: `backend/.env`, `backend/app.js`, `backend/config/permissions.js`, `frontend/src/App.jsx`, `frontend/src/components/Navbar.jsx`, `frontend/src/index.css`, `frontend/src/pages/checklists/ChecklistCreate.jsx`, `frontend/src/pages/checklists/ChecklistTaskView.jsx`, and `frontend/src/test/checklist-task-voice.test.jsx`.
+- New untracked application files: `backend/controllers/checklistTask.controller.js`, `backend/routes/checklistTask.routes.js`, `frontend/src/components/SearchableSelect.jsx`, and `frontend/src/pages/checklists/YourChecklist.jsx`.
+- Local environment file `backend/.env` is modified and currently tracked; it should be reviewed separately and ideally removed from tracking in a controlled cleanup.
 
 ## 4. Technology Stack
 
@@ -123,36 +142,34 @@ Deployment pattern:
 
 ## 5. Current Verification Status
 
-Commands run on May 4, 2026:
+Commands run on May 13, 2026:
 
 ```text
 npm run lint
 Result: passed
-Note: Node emitted a non-blocking DEP0040 punycode deprecation warning.
 ```
 
 ```text
 npm run test
-Backend: 10 suites passed, 19 tests passed
-Frontend: 7 files passed, 11 tests passed
+Backend: 12 suites passed, 34 tests passed
+Frontend: 11 files passed, 27 tests passed
 Result: passed
-Note: Node emitted a non-blocking DEP0040 punycode deprecation warning.
 ```
 
 ```text
 npm run build
 Result: passed
-Vite transformed 805 modules and completed the production frontend build.
+Vite transformed 862 modules and completed the production frontend build.
 Largest generated JS asset observed: `vendor-charts` at about 381 KB.
-Largest generated static image observed: `login` JPG at about 751 KB.
+Largest generated static image observed: `welcome` JPG at about 3.5 MB.
 ```
 
 Build output notes:
 
 - Largest CSS asset observed: `vendor-core` at about 231 KB.
-- Largest app JS chunk observed: `index` at about 224 KB.
-- Checklist page chunk observed: about 118 KB.
-- No runtime server health check was rerun during this May 4 documentation refresh.
+- Largest app JS chunk observed: `index` at about 278 KB.
+- Checklist page chunk observed: about 146 KB.
+- No runtime server health check was rerun during this May 13 documentation refresh.
 
 ## 6. Architecture Overview
 
@@ -235,6 +252,7 @@ The project currently includes code for these modules:
 - Employee master
 - Checklist master
 - Assigned checklist tasks
+- Employee "Your Checklist" task list
 - Checklist approvals
 - Checklist transfer
 - Checklist reports
@@ -540,26 +558,26 @@ Largest source files by line count:
 
 | Lines | File |
 |---:|---|
-| 7419 | `frontend/src/index.css` |
-| 4249 | `backend/controllers/checklist.controller.js` |
-| 2890 | `frontend/src/pages/Dashboard.jsx` |
-| 2020 | `backend/services/checklistWorkflow.service.js` |
+| 7895 | `frontend/src/index.css` |
+| 4659 | `backend/controllers/checklist.controller.js` |
+| 2894 | `frontend/src/pages/Dashboard.jsx` |
+| 2202 | `backend/services/checklistWorkflow.service.js` |
+| 1804 | `backend/controllers/dashboard.controller.js` |
+| 1763 | `frontend/src/pages/checklists/ChecklistCreate.jsx` |
 | 1754 | `frontend/src/pages/ChatModule.jsx` |
 | 1753 | `backend/controllers/complaint.controller.js` |
-| 1724 | `frontend/src/pages/checklists/ChecklistCreate.jsx` |
 | 1680 | `backend/controllers/poll.controller.js` |
-| 1516 | `backend/controllers/dashboard.controller.js` |
+| 1658 | `frontend/src/pages/checklists/ChecklistList.jsx` |
 | 1471 | `frontend/src/dashboard-redesign.css` |
-| 1208 | `frontend/src/pages/checklists/ChecklistTaskView.jsx` |
-| 1205 | `backend/services/chatbot.service.js` |
+| 1436 | `frontend/src/pages/EmployeeList.jsx` |
+| 1384 | `frontend/src/pages/checklists/ChecklistTaskView.jsx` |
+| 1211 | `backend/services/chatbot.service.js` |
 | 1147 | `frontend/src/pages/OwnTasks.jsx` |
-| 1127 | `frontend/src/components/Navbar.jsx` |
-| 1054 | `frontend/src/pages/checklists/ChecklistList.jsx` |
+| 1147 | `frontend/src/components/Navbar.jsx` |
 | 980 | `backend/services/createChatModule.service.js` |
 | 943 | `frontend/src/pages/RolePermissionSetup.jsx` |
 | 927 | `backend/controllers/attendance.controller.js` |
 | 922 | `frontend/src/pages/masters/ChecklistTransferMaster.jsx` |
-| 896 | `frontend/src/pages/IntroWelcomeScreen.jsx` |
 
 Interpretation:
 
@@ -579,13 +597,15 @@ Current build status:
 - `npm run build` passes.
 - Vite generated separate page/vendor chunks successfully.
 - No blocking build failure was observed.
+- The build currently transforms 862 modules.
 
 Current frontend risk:
 
 - Global CSS remains too centralized.
 - Some large route pages remain maintenance-heavy.
-- The login image is a relatively large static asset.
+- The `welcome` image is a large static asset at about 3.5 MB, and the login image remains about 751 KB.
 - Chart/vendor code is still one of the heavier frontend output groups.
+- The checklist route chunk has grown to about 146 KB after the employee checklist and attachment UX updates.
 
 Recommended frontend next steps:
 
@@ -601,9 +621,14 @@ Backend tests currently cover:
 - Auth login
 - Auth user listing active-user filtering
 - Auth update validation for blank optional ObjectId fields
+- Access scope behavior
+- Auth rate-limit middleware
+- Employee controller behavior
 - Permission middleware behavior
 - Checklist workflow/task flow
+- Checklist validator behavior
 - Checklist route precedence for `/setup-data`
+- Generated checklist task routes
 - Complaint lifecycle flow
 - Poll response flow
 
@@ -612,14 +637,18 @@ Frontend tests currently cover:
 - Login route render
 - Permission-based route guard
 - Attendance dashboard render
-- Checklist screen render
+- Checklist screen render and checklist report display helpers
 - Complaint report render
+- Employee list rendering
+- Employee duplicate validation helpers
+- Chat module voice behavior
+- Checklist task voice recording and multi-select attachment submission
 
-Current verification results from May 4, 2026:
+Current verification results from May 13, 2026:
 
 ```text
-Backend: 10 suites passed, 19 tests passed
-Frontend: 7 files passed, 11 tests passed
+Backend: 12 suites passed, 34 tests passed
+Frontend: 11 files passed, 27 tests passed
 ```
 
 Testing gaps:
@@ -632,6 +661,8 @@ Testing gaps:
 - No regression tests yet for Checklist Master status confirmation.
 - No date-time lifecycle tests yet for Poll Master.
 - No deep integration test yet for `/checklists/setup-data` scope filtering.
+- No backend test yet for `/api/checklist-tasks/your-checklist` employee-only authorization and filtering.
+- No frontend test yet for the new Your Checklist page filters and mobile card behavior.
 
 ## 20. Build and Deployment Readiness
 
@@ -699,16 +730,27 @@ Known issue 5: Missing migration/backfill for new date-time fields
 - New polls will store `startTime`, `endTime`, `startDateTime`, and `endDateTime`.
 - Older poll rows may need a backfill if they exist in production.
 
-Known issue 6: Local worktree is not clean
+Known issue 6: New employee checklist endpoint needs backend regression coverage
 
-- The current workspace contains uncommitted code and test updates.
-- Review, stage, and commit the May 4 auth/checklist changes before deployment handoff.
+- `/api/checklist-tasks/your-checklist` is now used by the new employee checklist page.
+- Frontend behavior is covered indirectly through current lint/build and one attachment regression test, but the endpoint itself needs tests for employee-only access, permission enforcement, date filtering, status filtering, and schedule filtering.
 
-Known issue 7: New checklist setup endpoint needs deeper coverage
+Known issue 7: Local worktree is not clean
+
+- The current workspace contains uncommitted code, style, test, and local environment updates.
+- Review and stage the May 13 checklist task and frontend UX changes before deployment handoff.
+- Treat `backend/.env` as a separate cleanup item; it is tracked today even though `.gitignore` lists it.
+
+Known issue 8: New checklist setup endpoint needs deeper coverage
 
 - `/checklists/setup-data` now returns multiple setup collections in one scoped response.
 - Current tests cover route precedence, but not full access-scope filtering or response-shape behavior.
 - Add integration-style tests before expanding this endpoint further.
+
+Known issue 9: Searchable select accessibility should be hardened
+
+- The reusable `SearchableSelect` is a helpful usability improvement for long lists.
+- It should receive focused keyboard-navigation tests before it is used broadly across more forms.
 
 ## 22. Risk Matrix
 
@@ -725,61 +767,69 @@ Known issue 7: New checklist setup endpoint needs deeper coverage
 | Observability | Basic | Medium | Structured logs exist; no metrics/tracing/correlation ids |
 | Data safety | Improved | Medium | Status confirmations and soft-delete protections improved |
 | Poll scheduling | Improved | Medium | Date-time lifecycle added; scheduler-backed notifications recommended |
-| Worktree hygiene | Needs commit | Medium | May 4 changes are still local and uncommitted |
+| Employee checklist endpoint | New and working locally | Medium | Needs backend authorization/filter regression tests |
+| Worktree hygiene | Needs commit | Medium | May 13 changes are still local and uncommitted; tracked `backend/.env` needs separate handling |
 
 ## 23. Recommended Next Priorities
 
-Priority 1: Review and commit the May 4 local changes
+Priority 1: Review and commit the May 13 local changes
 
-- Review auth, checklist, checklist route, validator, and frontend admin/checklist changes.
-- Stage the two new backend test files.
-- Commit after confirming the Main Admin-only checklist approval rule is expected.
+- Review the new checklist task controller/route, app route mount, permission label change, Your Checklist page, Navbar links, searchable selector component, Checklist Create selector changes, task attachment changes, CSS, and attachment test.
+- Stage the new source files intentionally.
+- Handle `backend/.env` separately before commit because it is tracked despite the ignore rule.
 
-Priority 2: Add deeper tests for the new checklist setup endpoint
+Priority 2: Add tests for the new employee checklist endpoint
+
+- Verify `/api/checklist-tasks/your-checklist` rejects non-employee requesters.
+- Verify the endpoint only returns tasks assigned to the authenticated employee.
+- Verify search, status, schedule type, and date-range filters.
+- Verify the frontend Your Checklist page renders empty, loading, filtered, desktop, and mobile states.
+
+Priority 3: Add deeper tests for the checklist setup endpoint
 
 - Verify `/checklists/setup-data` applies employee, department, site, and checklist scope filters.
 - Verify inactive records are excluded where intended.
 - Verify response shape remains stable for Checklist Create.
 
-Priority 3: Add regression tests for status and poll-window behavior
+Priority 4: Add regression tests for status and poll-window behavior
 
 - Employee Active/Inactive status update.
 - Checklist Master Active/Inactive status update.
 - Poll upcoming/active/expired submission rules.
 - Poll create/update validation for date-time windows.
 
-Priority 4: Add a poll activation scheduler
+Priority 5: Add a poll activation scheduler
 
 - Periodically transition eligible polls.
 - Release notifications exactly when `startDateTime` arrives.
 - Optionally send reminders before `endDateTime`.
 
-Priority 5: Backfill existing poll rows
+Priority 6: Backfill existing poll rows
 
 - Populate `startTime`, `endTime`, `startDateTime`, and `endDateTime` for older date-only polls.
 - Decide defaults for older records, such as `00:00` start and `23:59` end in IST.
 
-Priority 6: Refactor checklist backend safely
+Priority 7: Refactor checklist backend safely
 
 - Extract status helpers.
 - Extract report query logic.
 - Extract scheduler and recurrence helpers.
 - Add tests before each extraction.
 
-Priority 7: Split frontend CSS and large pages
+Priority 8: Split frontend CSS and large pages
 
 - Split `index.css`.
 - Extract Dashboard components.
 - Extract Checklist List/Create sections.
 - Extract Poll Create/List/Report sections if the poll module continues growing.
 
-Priority 8: Improve upload and attachment security
+Priority 9: Improve upload and attachment security
 
 - Add MIME and file-size tests.
 - Add authenticated attachment download routes.
 - Add orphaned upload cleanup policy.
 
-Priority 9: Improve observability
+Priority 10: Improve observability
 
 - Add request ids.
 - Add a structured application logger.
@@ -788,8 +838,8 @@ Priority 9: Improve observability
 
 ## 24. Final Verdict
 
-As of May 4, 2026, the project is functionally broad, locally verified, and suitable for controlled internal use with the existing safeguards. The latest local updates strengthen auth/user edit behavior, checklist setup loading, and Checklist Master approval authority while preserving the earlier Employee Master, Checklist Master, and Polling System safety improvements.
+As of May 13, 2026, the project is functionally broad, locally verified, and suitable for controlled internal use with the existing safeguards. The latest local updates strengthen employee checklist access, checklist setup usability, and task submission attachment handling while preserving the earlier auth, Checklist Master approval, Employee Master, Checklist Master, and Polling System safety improvements.
 
-The strongest parts of the system are its permission model, module coverage, and improving validation/security foundation. The main remaining risks are maintainability hotspots, limited integration/E2E test coverage, localStorage token exposure, static upload serving, the absence of a dedicated poll activation scheduler, and the fact that the current May 4 changes are still uncommitted.
+The strongest parts of the system are its permission model, module coverage, and improving validation/security foundation. The main remaining risks are maintainability hotspots, limited integration/E2E test coverage, localStorage token exposure, static upload serving, the absence of a dedicated poll activation scheduler, missing backend regression tests for the new employee checklist endpoint, and the fact that the current May 13 changes are still uncommitted.
 
-The next best work is to review and commit the current local changes, add focused tests for `/checklists/setup-data`, and continue targeted regression testing plus incremental decomposition of the largest files. Avoid broad rewrites; the app has enough surface area now that small, tested improvements will carry it further than sweeping restructuring.
+The next best work is to review and commit the current local changes, add focused tests for `/api/checklist-tasks/your-checklist` and `/checklists/setup-data`, and continue targeted regression testing plus incremental decomposition of the largest files. Avoid broad rewrites; the app has enough surface area now that small, tested improvements will carry it further than sweeping restructuring.

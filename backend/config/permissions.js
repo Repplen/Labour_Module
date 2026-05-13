@@ -150,7 +150,7 @@ const MODULE_CATALOG = [
   },
   {
     key: "assigned_checklists",
-    name: "Assigned Checklist",
+    name: "Tasks",
     description: "Employee checklist tasks assigned to the current user.",
     category: "Checklist",
     routePath: "/checklists",

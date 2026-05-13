@@ -53,6 +53,25 @@ const buildDirectorSelectionState = (savedDirectorNames = [], employeeRows = [])
   return { selectedEmployeeIds, legacyDirectorNames };
 };
 
+const duplicateCompanyMessage = "This company name already exists.";
+
+const normalizeCompanyName = (value) => String(value || "").trim().toLowerCase();
+
+const getApiCompanyNameDuplicateError = (error) => {
+  const errors = Array.isArray(error?.response?.data?.errors)
+    ? error.response.data.errors
+    : [];
+  const hasNameError = errors.some(
+    (row) => String(row?.field || row?.path || "").trim() === "name"
+  );
+
+  if (hasNameError || error?.response?.status === 409) {
+    return duplicateCompanyMessage;
+  }
+
+  return "";
+};
+
 export default function CompanyMaster() {
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -61,6 +80,7 @@ export default function CompanyMaster() {
   const [legacyDirectorNames, setLegacyDirectorNames] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serverNameError, setServerNameError] = useState("");
 
   useEffect(() => {
     fetchCompanies();
@@ -79,6 +99,20 @@ export default function CompanyMaster() {
         })),
     [employees]
   );
+  const clientNameError = useMemo(() => {
+    const nextName = normalizeCompanyName(name);
+    if (!nextName) return "";
+
+    const hasDuplicate = companies.some(
+      (company) =>
+        String(company?._id || "") !== String(editingId || "") &&
+        normalizeCompanyName(company?.name) === nextName
+    );
+
+    return hasDuplicate ? duplicateCompanyMessage : "";
+  }, [companies, editingId, name]);
+  const nameError = clientNameError || serverNameError;
+  const hasDuplicateError = Boolean(nameError);
 
   const fetchCompanies = async () => {
     try {
@@ -105,13 +139,16 @@ export default function CompanyMaster() {
     setDirectorEmployeeIds([]);
     setLegacyDirectorNames([]);
     setEditingId("");
+    setServerNameError("");
   };
 
   const saveCompany = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return alert("Enter company name");
+    if (hasDuplicateError) return;
 
     setLoading(true);
+    setServerNameError("");
 
     try {
       const payload = {
@@ -129,6 +166,12 @@ export default function CompanyMaster() {
       resetForm();
       fetchCompanies();
     } catch (err) {
+      const duplicateError = getApiCompanyNameDuplicateError(err);
+      if (duplicateError) {
+        setServerNameError(duplicateError);
+        return;
+      }
+
       alert(err.response?.data?.message || "Save failed");
     } finally {
       setLoading(false);
@@ -143,6 +186,7 @@ export default function CompanyMaster() {
     setDirectorEmployeeIds(selectedEmployeeIds);
     setLegacyDirectorNames(legacyNames);
     setEditingId(row._id);
+    setServerNameError("");
   };
 
   const deleteRow = async (id) => {
@@ -183,11 +227,21 @@ export default function CompanyMaster() {
           <div className="col-lg-4">
             <label className="form-label fw-semibold">Company Name</label>
             <input
-              className="form-control"
+              className={`form-control${nameError ? " is-invalid" : ""}`}
               placeholder="Company Name"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setServerNameError("");
+              }}
+              aria-invalid={nameError ? "true" : "false"}
+              aria-describedby={nameError ? "company-name-duplicate-error" : undefined}
             />
+            {nameError ? (
+              <div className="invalid-feedback d-block" id="company-name-duplicate-error">
+                {nameError}
+              </div>
+            ) : null}
           </div>
 
           <div className="col-lg-8">
@@ -217,7 +271,11 @@ export default function CompanyMaster() {
         )}
 
         <div className="d-flex gap-2 mt-3">
-          <button className="btn btn-success" onClick={saveCompany} disabled={loading}>
+          <button
+            className="btn btn-success"
+            onClick={saveCompany}
+            disabled={loading || hasDuplicateError}
+          >
             {loading ? "Saving..." : editingId ? "Update Company" : "Save Company"}
           </button>
           {editingId ? (

@@ -7,6 +7,33 @@ const { requirePermission } = require("../middleware/permissions");
 const { buildCompanyScopeFilter } = require("../services/accessScope.service");
 
 const normalizeName = (value) => String(value || "").trim();
+const duplicateCompanyMessage = "Duplicate company data found";
+const duplicateCompanyNameError = {
+  field: "name",
+  message: "This company name already exists.",
+};
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sendDuplicateCompanyResponse = (res) =>
+  res.status(409).json({
+    success: false,
+    message: duplicateCompanyMessage,
+    errors: [duplicateCompanyNameError],
+  });
+
+const findDuplicateCompany = (name, currentCompanyId = null) => {
+  const filter = {
+    name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+  };
+
+  if (currentCompanyId) {
+    filter._id = { $ne: currentCompanyId };
+  }
+
+  return Company.exists(filter);
+};
+
 const parseNameList = (value) => {
   const raw =
     Array.isArray(value)
@@ -108,11 +135,14 @@ router.post("/", auth, requirePermission("company_master", "add"), async (req, r
     if (!name) return res.status(400).json({ message: "Company name is required" });
     if (directorError) return res.status(400).json({ message: directorError });
 
+    const duplicateCompany = await findDuplicateCompany(name);
+    if (duplicateCompany) return sendDuplicateCompanyResponse(res);
+
     const data = await Company.create({ name, directorNames });
     res.status(201).json(data);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Company already exists" });
+      return sendDuplicateCompanyResponse(res);
     }
     res.status(500).json({ message: "Failed to create company" });
   }
@@ -134,6 +164,9 @@ router.put("/:id", auth, requirePermission("company_master", "edit"), async (req
     });
     if (!existing) return res.status(404).json({ message: "Company not found" });
 
+    const duplicateCompany = await findDuplicateCompany(name, req.params.id);
+    if (duplicateCompany) return sendDuplicateCompanyResponse(res);
+
     const previousName = existing.name;
     existing.name = name;
     existing.directorNames = directorNames;
@@ -146,7 +179,7 @@ router.put("/:id", auth, requirePermission("company_master", "edit"), async (req
     res.json(existing);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Company already exists" });
+      return sendDuplicateCompanyResponse(res);
     }
     res.status(500).json({ message: "Failed to update company" });
   }

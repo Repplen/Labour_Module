@@ -68,6 +68,25 @@ const buildHeadSelectionState = (savedHeadNames = [], employeeRows = []) => {
   return { selectedEmployeeIds, legacyHeadNames };
 };
 
+const duplicateSiteMessage = "This site name already exists.";
+
+const normalizeMasterName = (value) => String(value || "").trim().toLowerCase();
+
+const getApiNameDuplicateError = (error) => {
+  const errors = Array.isArray(error?.response?.data?.errors)
+    ? error.response.data.errors
+    : [];
+  const hasNameError = errors.some(
+    (row) => String(row?.field || row?.path || "").trim() === "name"
+  );
+
+  if (hasNameError || error?.response?.status === 409) {
+    return duplicateSiteMessage;
+  }
+
+  return "";
+};
+
 export default function SiteMaster() {
   const [sites, setSites] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -80,6 +99,7 @@ export default function SiteMaster() {
   const [legacySiteLeadNames, setLegacySiteLeadNames] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serverNameError, setServerNameError] = useState("");
 
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [selectedSiteName, setSelectedSiteName] = useState("");
@@ -157,6 +177,20 @@ export default function SiteMaster() {
       })),
     [employeeOptions]
   );
+  const clientNameError = useMemo(() => {
+    const nextName = normalizeMasterName(name);
+    if (!nextName) return "";
+
+    const hasDuplicate = sites.some(
+      (site) =>
+        String(site?._id || "") !== String(editingId || "") &&
+        normalizeMasterName(site?.name) === nextName
+    );
+
+    return hasDuplicate ? duplicateSiteMessage : "";
+  }, [editingId, name, sites]);
+  const nameError = clientNameError || serverNameError;
+  const hasDuplicateError = Boolean(nameError);
 
   const resetForm = () => {
     setCompanyName("");
@@ -166,6 +200,7 @@ export default function SiteMaster() {
     setSiteLeadEmployeeIds([]);
     setLegacySiteLeadNames([]);
     setEditingId("");
+    setServerNameError("");
   };
 
   const saveSite = async () => {
@@ -178,8 +213,10 @@ export default function SiteMaster() {
     if (names.length > 1) {
       return alert("Only one site name can be added at a time");
     }
+    if (hasDuplicateError) return;
 
     setLoading(true);
+    setServerNameError("");
     try {
       if (editingId) {
         await api.put(`/sites/${editingId}`, {
@@ -204,6 +241,12 @@ export default function SiteMaster() {
       resetForm();
       fetchSites();
     } catch (err) {
+      const duplicateError = getApiNameDuplicateError(err);
+      if (duplicateError) {
+        setServerNameError(duplicateError);
+        return;
+      }
+
       alert(err.response?.data?.message || "Save failed");
     } finally {
       setLoading(false);
@@ -222,6 +265,7 @@ export default function SiteMaster() {
     setSiteLeadEmployeeIds(selectedSiteLeadIds);
     setLegacySiteLeadNames(legacySiteLeadLabels);
     setEditingId(row._id);
+    setServerNameError("");
   };
 
   const deleteRow = async (id) => {
@@ -411,11 +455,21 @@ export default function SiteMaster() {
         )}
 
         <input
-          className="form-control mb-2"
+          className={`form-control${nameError ? " is-invalid" : " mb-2"}`}
           placeholder="Site Name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setServerNameError("");
+          }}
+          aria-invalid={nameError ? "true" : "false"}
+          aria-describedby={nameError ? "site-name-duplicate-error" : undefined}
         />
+        {nameError ? (
+          <div className="invalid-feedback d-block mb-2" id="site-name-duplicate-error">
+            {nameError}
+          </div>
+        ) : null}
         <SearchableCheckboxSelector
           label="Site Heads"
           helperText="Pick one or more site heads from the employee master."
@@ -465,7 +519,11 @@ export default function SiteMaster() {
         )}
 
         <div className="d-flex flex-wrap gap-2">
-          <button className="btn btn-success" onClick={saveSite} disabled={loading}>
+          <button
+            className="btn btn-success"
+            onClick={saveSite}
+            disabled={loading || hasDuplicateError}
+          >
             {loading ? "Saving..." : editingId ? "Update" : "Save"}
           </button>
           {editingId && (

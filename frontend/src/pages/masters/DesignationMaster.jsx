@@ -1,11 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
+
+const duplicateDesignationMessage = "This designation name already exists.";
+
+const normalizeMasterName = (value) => String(value || "").trim().toLowerCase();
+
+const getApiNameDuplicateError = (error) => {
+  const errors = Array.isArray(error?.response?.data?.errors)
+    ? error.response.data.errors
+    : [];
+  const hasNameError = errors.some(
+    (row) => String(row?.field || row?.path || "").trim() === "name"
+  );
+
+  if (hasNameError || error?.response?.status === 409) {
+    return duplicateDesignationMessage;
+  }
+
+  return "";
+};
 
 export default function DesignationMaster() {
   const [list, setList] = useState([]);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serverNameError, setServerNameError] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -20,17 +40,34 @@ export default function DesignationMaster() {
       setList([]);
     }
   };
+  const clientNameError = useMemo(() => {
+    const nextName = normalizeMasterName(name);
+    if (!nextName) return "";
+
+    const hasDuplicate = list.some(
+      (designation) =>
+        String(designation?._id || "") !== String(editingId || "") &&
+        normalizeMasterName(designation?.name) === nextName
+    );
+
+    return hasDuplicate ? duplicateDesignationMessage : "";
+  }, [editingId, list, name]);
+  const nameError = clientNameError || serverNameError;
+  const hasDuplicateError = Boolean(nameError);
 
   const resetForm = () => {
     setName("");
     setEditingId("");
+    setServerNameError("");
   };
 
   const saveData = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return alert("Enter designation");
+    if (hasDuplicateError) return;
 
     setLoading(true);
+    setServerNameError("");
     try {
       if (editingId) {
         await api.put(`/designations/${editingId}`, { name: trimmedName });
@@ -41,6 +78,12 @@ export default function DesignationMaster() {
       resetForm();
       fetchData();
     } catch (err) {
+      const duplicateError = getApiNameDuplicateError(err);
+      if (duplicateError) {
+        setServerNameError(duplicateError);
+        return;
+      }
+
       alert(err.response?.data?.message || "Save failed");
     } finally {
       setLoading(false);
@@ -50,6 +93,7 @@ export default function DesignationMaster() {
   const editRow = (row) => {
     setName(row.name || "");
     setEditingId(row._id);
+    setServerNameError("");
   };
 
   const deleteRow = async (id) => {
@@ -84,14 +128,28 @@ export default function DesignationMaster() {
 
       <div className="soft-card mb-4">
         <input
-          className="form-control mb-2"
+          className={`form-control${nameError ? " is-invalid" : " mb-2"}`}
           placeholder="Designation Name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setServerNameError("");
+          }}
+          aria-invalid={nameError ? "true" : "false"}
+          aria-describedby={nameError ? "designation-name-duplicate-error" : undefined}
         />
+        {nameError ? (
+          <div className="invalid-feedback d-block mb-2" id="designation-name-duplicate-error">
+            {nameError}
+          </div>
+        ) : null}
 
         <div className="d-flex flex-wrap gap-2">
-          <button className="btn btn-success" onClick={saveData} disabled={loading}>
+          <button
+            className="btn btn-success"
+            onClick={saveData}
+            disabled={loading || hasDuplicateError}
+          >
             {loading ? "Saving..." : editingId ? "Update" : "Save"}
           </button>
           {editingId && (

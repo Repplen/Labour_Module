@@ -11,6 +11,7 @@ const {
   resolveAccessibleEmployeeIds,
 } = require("../services/accessScope.service");
 const {
+  normalizeEmployeeCode,
   normalizeEmployeeEmail,
   normalizeEmployeeMobile,
 } = require("../utils/employeeContactNormalization");
@@ -19,6 +20,7 @@ const normalizeSites = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
 const duplicateEmployeeMessage = "Duplicate employee data found";
 const duplicateEmployeeFieldMessages = {
+  employeeCode: "This employee code already exists.",
   email: "This email ID already exists.",
   mobile: "This mobile number already exists.",
 };
@@ -50,10 +52,11 @@ const normalizeDocumentList = (value) =>
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const buildExactEmailRegex = (email) => new RegExp(`^${escapeRegExp(email)}$`, "i");
+const buildExactTrimmedRegex = (value, options = "") =>
+  new RegExp(`^\\s*${escapeRegExp(value)}\\s*$`, options);
 
 const buildWhitespaceAgnosticMobileRegex = (mobile) =>
-  new RegExp(`^\\s*${[...mobile].map(escapeRegExp).join("\\s*")}\\s*$`);
+  new RegExp(`^\\s*${[...mobile].map(escapeRegExp).join("[\\s-]*")}\\s*$`);
 
 const buildDuplicateEmployeeError = (field) => ({
   field,
@@ -75,18 +78,23 @@ const getDuplicateKeyEmployeeErrors = (error) => {
     ...Object.keys(error.keyValue || {}),
   ]);
 
-  return ["email", "mobile"]
+  return ["employeeCode", "email", "mobile"]
     .filter((field) => duplicateFields.has(field))
     .map(buildDuplicateEmployeeError);
 };
 
 const findDuplicateEmployeeErrors = async (employeeData = {}, currentEmployeeId = null) => {
+  const employeeCode = normalizeEmployeeCode(employeeData.employeeCode);
   const email = normalizeEmployeeEmail(employeeData.email);
   const mobile = normalizeEmployeeMobile(employeeData.mobile);
   const duplicateFilters = [];
 
+  if (employeeCode) {
+    duplicateFilters.push({ employeeCode: { $regex: buildExactTrimmedRegex(employeeCode) } });
+  }
+
   if (email) {
-    duplicateFilters.push({ email: { $regex: buildExactEmailRegex(email) } });
+    duplicateFilters.push({ email: { $regex: buildExactTrimmedRegex(email, "i") } });
   }
 
   if (mobile) {
@@ -96,7 +104,7 @@ const findDuplicateEmployeeErrors = async (employeeData = {}, currentEmployeeId 
   if (!duplicateFilters.length) {
     return {
       errors: [],
-      normalizedValues: { email, mobile },
+      normalizedValues: { employeeCode, email, mobile },
     };
   }
 
@@ -106,8 +114,17 @@ const findDuplicateEmployeeErrors = async (employeeData = {}, currentEmployeeId 
     filter._id = { $ne: currentEmployeeId };
   }
 
-  const duplicateRows = await Employee.find(filter, "email mobile").lean();
+  const duplicateRows = await Employee.find(filter, "employeeCode email mobile").lean();
   const errors = [];
+
+  if (
+    employeeCode &&
+    duplicateRows.some(
+      (employee) => normalizeEmployeeCode(employee.employeeCode) === employeeCode
+    )
+  ) {
+    errors.push(buildDuplicateEmployeeError("employeeCode"));
+  }
 
   if (
     email &&
@@ -125,11 +142,15 @@ const findDuplicateEmployeeErrors = async (employeeData = {}, currentEmployeeId 
 
   return {
     errors,
-    normalizedValues: { email, mobile },
+    normalizedValues: { employeeCode, email, mobile },
   };
 };
 
 const applyNormalizedEmployeeContactFields = (target, normalizedValues = {}) => {
+  if (Object.prototype.hasOwnProperty.call(target, "employeeCode")) {
+    target.employeeCode = normalizedValues.employeeCode || undefined;
+  }
+
   if (Object.prototype.hasOwnProperty.call(target, "email")) {
     target.email = normalizedValues.email || undefined;
   }

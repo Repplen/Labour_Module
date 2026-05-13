@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 
 const Employee = require("../models/Employee");
 const {
+  normalizeEmployeeCode,
   normalizeEmployeeEmail,
   normalizeEmployeeMobile,
 } = require("../utils/employeeContactNormalization");
@@ -52,17 +53,24 @@ async function reportEmployeeContactDuplicates() {
 
   try {
     const employees = await Employee.find({}, "employeeCode employeeName email mobile").lean();
+    const employeeCodeGroups = new Map();
     const emailGroups = new Map();
     const mobileGroups = new Map();
 
     employees.forEach((employee) => {
+      addToGroup(employeeCodeGroups, normalizeEmployeeCode(employee.employeeCode), employee);
       addToGroup(emailGroups, normalizeEmployeeEmail(employee.email), employee);
       addToGroup(mobileGroups, normalizeEmployeeMobile(employee.mobile), employee);
     });
 
+    const employeeCodeDuplicateCount = printDuplicateGroups(
+      "employeeCode",
+      employeeCodeGroups
+    );
     const emailDuplicateCount = printDuplicateGroups("email", emailGroups);
     const mobileDuplicateCount = printDuplicateGroups("mobile", mobileGroups);
-    const duplicateCount = emailDuplicateCount + mobileDuplicateCount;
+    const duplicateCount =
+      employeeCodeDuplicateCount + emailDuplicateCount + mobileDuplicateCount;
 
     console.log(
       `[employee-duplicates] scanned=${employees.length} duplicateGroups=${duplicateCount}`

@@ -28,6 +28,7 @@ import ChecklistCreate from "./pages/checklists/ChecklistCreate";
 import ChecklistView from "./pages/checklists/ChecklistView";
 import ChecklistTasksAdmin from "./pages/checklists/ChecklistTasksAdmin";
 import ChecklistTaskView from "./pages/checklists/ChecklistTaskView";
+import YourChecklist from "./pages/checklists/YourChecklist";
 import ChecklistApprovals from "./pages/checklists/ChecklistApprovals";
 import ChecklistAdminApprovals from "./pages/checklists/ChecklistAdminApprovals";
 import ChecklistReport from "./pages/reports/ChecklistReport";
@@ -421,6 +422,15 @@ function AppRoutes() {
             element={
               <PermissionRoute moduleKey="site_master">
                 <SiteMaster />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/your-checklist"
+            element={
+              <PermissionRoute moduleKey="assigned_checklists" actionKey="view">
+                <YourChecklist />
               </PermissionRoute>
             }
           />

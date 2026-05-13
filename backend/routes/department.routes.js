@@ -7,6 +7,33 @@ const { buildDepartmentScopeFilter } = require("../services/accessScope.service"
 
 const MAX_SUB_LEVELS = 4;
 const normalizeName = (value) => String(value || "").trim();
+const duplicateDepartmentMessage = "Duplicate department data found";
+const duplicateDepartmentNameError = {
+  field: "name",
+  message: "This department name already exists.",
+};
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sendDuplicateDepartmentResponse = (res) =>
+  res.status(409).json({
+    success: false,
+    message: duplicateDepartmentMessage,
+    errors: [duplicateDepartmentNameError],
+  });
+
+const findDuplicateDepartment = (name, currentDepartmentId = null) => {
+  const filter = {
+    name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+  };
+
+  if (currentDepartmentId) {
+    filter._id = { $ne: currentDepartmentId };
+  }
+
+  return Department.exists(filter);
+};
+
 const parseNameList = (value) => {
   const raw =
     Array.isArray(value)
@@ -164,11 +191,14 @@ router.post("/", auth, requirePermission("department_master", "add"), async (req
       return res.status(400).json({ message: departmentLeadError });
     }
 
+    const duplicateDepartment = await findDuplicateDepartment(name);
+    if (duplicateDepartment) return sendDuplicateDepartmentResponse(res);
+
     const data = await Department.create({ name, headNames, departmentLeadNames });
     res.status(201).json(data);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Department already exists" });
+      return sendDuplicateDepartmentResponse(res);
     }
     res.status(500).json({ message: "Failed to create department" });
   }
@@ -197,6 +227,9 @@ router.put("/:id", auth, requirePermission("department_master", "edit"), async (
       return res.status(400).json({ message: departmentLeadError });
     }
 
+    const duplicateDepartment = await findDuplicateDepartment(name, req.params.id);
+    if (duplicateDepartment) return sendDuplicateDepartmentResponse(res);
+
     const updated = await Department.findOneAndUpdate(
       { _id: req.params.id, isActive: { $ne: false } },
       { name, headNames, departmentLeadNames },
@@ -207,7 +240,7 @@ router.put("/:id", auth, requirePermission("department_master", "edit"), async (
     res.json(updated);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Department already exists" });
+      return sendDuplicateDepartmentResponse(res);
     }
     res.status(500).json({ message: "Failed to update department" });
   }

@@ -67,6 +67,25 @@ const buildHeadSelectionState = (savedHeadNames = [], employeeRows = []) => {
   return { selectedEmployeeIds, legacyHeadNames };
 };
 
+const duplicateDepartmentMessage = "This department name already exists.";
+
+const normalizeMasterName = (value) => String(value || "").trim().toLowerCase();
+
+const getApiNameDuplicateError = (error) => {
+  const errors = Array.isArray(error?.response?.data?.errors)
+    ? error.response.data.errors
+    : [];
+  const hasNameError = errors.some(
+    (row) => String(row?.field || row?.path || "").trim() === "name"
+  );
+
+  if (hasNameError || error?.response?.status === 409) {
+    return duplicateDepartmentMessage;
+  }
+
+  return "";
+};
+
 export default function DepartmentMaster() {
   const [departments, setDepartments] = useState([]);
   const [name, setName] = useState("");
@@ -77,6 +96,7 @@ export default function DepartmentMaster() {
   const [legacyDepartmentLeadNames, setLegacyDepartmentLeadNames] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serverNameError, setServerNameError] = useState("");
 
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
   const [selectedDepartmentName, setSelectedDepartmentName] = useState("");
@@ -131,6 +151,20 @@ export default function DepartmentMaster() {
       })),
     [employeeOptions]
   );
+  const clientNameError = useMemo(() => {
+    const nextName = normalizeMasterName(name);
+    if (!nextName) return "";
+
+    const hasDuplicate = departments.some(
+      (department) =>
+        String(department?._id || "") !== String(editingId || "") &&
+        normalizeMasterName(department?.name) === nextName
+    );
+
+    return hasDuplicate ? duplicateDepartmentMessage : "";
+  }, [departments, editingId, name]);
+  const nameError = clientNameError || serverNameError;
+  const hasDuplicateError = Boolean(nameError);
 
   const resetDepartmentForm = () => {
     setName("");
@@ -139,13 +173,16 @@ export default function DepartmentMaster() {
     setDepartmentLeadEmployeeIds([]);
     setLegacyDepartmentLeadNames([]);
     setEditingId("");
+    setServerNameError("");
   };
 
   const saveDepartment = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return alert("Enter department name");
+    if (hasDuplicateError) return;
 
     setLoading(true);
+    setServerNameError("");
     try {
       if (editingId) {
         await api.put(`/departments/${editingId}`, {
@@ -168,6 +205,12 @@ export default function DepartmentMaster() {
       resetDepartmentForm();
       fetchDepartments();
     } catch (err) {
+      const duplicateError = getApiNameDuplicateError(err);
+      if (duplicateError) {
+        setServerNameError(duplicateError);
+        return;
+      }
+
       alert(err.response?.data?.message || "Save failed");
     } finally {
       setLoading(false);
@@ -187,6 +230,7 @@ export default function DepartmentMaster() {
     setDepartmentLeadEmployeeIds(selectedDepartmentLeadIds);
     setLegacyDepartmentLeadNames(legacyDepartmentLeadLabels);
     setEditingId(row._id);
+    setServerNameError("");
   };
 
   const deleteDepartment = async (id) => {
@@ -350,11 +394,21 @@ export default function DepartmentMaster() {
 
       <div className="soft-card mb-4">
         <input
-          className="form-control mb-2"
+          className={`form-control${nameError ? " is-invalid" : " mb-2"}`}
           placeholder="Department Name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setServerNameError("");
+          }}
+          aria-invalid={nameError ? "true" : "false"}
+          aria-describedby={nameError ? "department-name-duplicate-error" : undefined}
         />
+        {nameError ? (
+          <div className="invalid-feedback d-block mb-2" id="department-name-duplicate-error">
+            {nameError}
+          </div>
+        ) : null}
         <SearchableCheckboxSelector
           label="Department Heads"
           helperText="Pick one or more department heads from the employee master."
@@ -402,7 +456,11 @@ export default function DepartmentMaster() {
           </div>
         )}
         <div className="d-flex gap-2">
-          <button className="btn btn-success" onClick={saveDepartment} disabled={loading}>
+          <button
+            className="btn btn-success"
+            onClick={saveDepartment}
+            disabled={loading || hasDuplicateError}
+          >
             {loading ? "Saving..." : editingId ? "Update Department" : "Save Department"}
           </button>
           {editingId && (

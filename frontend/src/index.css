@@ -3962,6 +3962,37 @@ a:hover {
   gap: 0.55rem;
 }
 
+.checklist-attachment-picker {
+  padding: 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
+}
+
+.checklist-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.checklist-attachment-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+.checklist-attachment-list__meta {
+  min-width: 0;
+}
+
 .checklist-voice-recorder__status {
   display: inline-flex;
   align-items: center;
@@ -5052,6 +5083,108 @@ a:hover {
 .selection-option__meta {
   color: var(--app-muted);
   font-size: 0.84rem;
+}
+
+.searchable-select {
+  position: relative;
+}
+
+.searchable-select__button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  text-align: left;
+}
+
+.searchable-select__button > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchable-select__menu {
+  position: absolute;
+  z-index: 1080;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--app-input-border);
+  border-radius: 0.75rem;
+  background: var(--app-input-bg);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+}
+
+.searchable-select__search {
+  margin-bottom: 0.4rem;
+}
+
+.searchable-select__list {
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.searchable-select__option {
+  display: block;
+  width: 100%;
+  padding: 0.52rem 0.65rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--app-input-text);
+  text-align: left;
+}
+
+.searchable-select__option:hover,
+.searchable-select__option:focus-visible,
+.searchable-select__option--active {
+  background: var(--app-brand-soft);
+  color: var(--app-brand);
+}
+
+.searchable-select__option-label,
+.searchable-select__option-description {
+  display: block;
+}
+
+.searchable-select__option-label {
+  font-weight: 600;
+}
+
+.searchable-select__option-description {
+  margin-top: 0.1rem;
+  color: var(--app-muted);
+  font-size: 0.82rem;
+}
+
+.searchable-select__empty {
+  padding: 0.85rem 0.65rem;
+  color: var(--app-muted);
+  font-size: 0.9rem;
+}
+
+.your-checklist-card {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: 0 12px 26px rgba(8, 24, 48, 0.06);
+}
+
+.your-checklist-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+@media (max-width: 420px) {
+  .your-checklist-card__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .poll-report-question__badge {

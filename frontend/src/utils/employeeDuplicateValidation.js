@@ -1,13 +1,17 @@
 export const employeeDuplicateMessages = {
-  email: "This email ID already exists. Please use a different email.",
-  mobile: "This mobile number already exists. Please use a different mobile number.",
+  employeeCode: "This employee code already exists.",
+  email: "This email ID already exists.",
+  mobile: "This mobile number already exists.",
 };
+
+export const normalizeEmployeeCode = (value) =>
+  String(value || "").trim();
 
 export const normalizeEmployeeEmail = (value) =>
   String(value || "").trim().toLowerCase();
 
 export const normalizeEmployeeMobile = (value) =>
-  String(value || "").replace(/\s+/g, "");
+  String(value || "").replace(/[\s-]+/g, "");
 
 const isSameEmployee = (employee, currentEmployeeId) =>
   currentEmployeeId && String(employee?._id || "") === String(currentEmployeeId);
@@ -17,9 +21,22 @@ export const getEmployeeDuplicateErrors = (
   employeeData = {},
   currentEmployeeId = null
 ) => {
+  const employeeCode = normalizeEmployeeCode(employeeData.employeeCode);
   const email = normalizeEmployeeEmail(employeeData.email);
   const mobile = normalizeEmployeeMobile(employeeData.mobile);
   const duplicateErrors = {};
+
+  if (employeeCode) {
+    const hasDuplicateEmployeeCode = employees.some(
+      (employee) =>
+        !isSameEmployee(employee, currentEmployeeId) &&
+        normalizeEmployeeCode(employee?.employeeCode) === employeeCode
+    );
+
+    if (hasDuplicateEmployeeCode) {
+      duplicateErrors.employeeCode = employeeDuplicateMessages.employeeCode;
+    }
+  }
 
   if (email) {
     const hasDuplicateEmail = employees.some(
@@ -55,7 +72,7 @@ export const getApiDuplicateEmployeeErrors = (error) => {
   return errors.reduce((result, row) => {
     const field = String(row?.field || row?.path || "").trim();
 
-    if (field === "email" || field === "mobile") {
+    if (field === "employeeCode" || field === "email" || field === "mobile") {
       return {
         ...result,
         [field]: employeeDuplicateMessages[field],

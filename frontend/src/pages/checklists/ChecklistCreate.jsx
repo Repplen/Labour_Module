@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/axios";
+import SearchableSelect from "../../components/SearchableSelect";
 import { usePermissions } from "../../context/usePermissions";
 import {
   formatApprovalLabel,
@@ -410,6 +411,14 @@ export default function ChecklistCreate({ mode = "create" }) {
     if (!form.employeeAssignedSite) return employees;
     return employees.filter((employee) => employeeHasSite(employee, form.employeeAssignedSite));
   }, [employees, form.employeeAssignedSite]);
+  const assignedEmployeeOptions = useMemo(
+    () =>
+      filteredEmployees.map((employee) => ({
+        value: employee._id,
+        label: formatEmployeeLabel(employee),
+      })),
+    [filteredEmployees]
+  );
   const availableSites = useMemo(() => {
     if (selectedEmployee) {
       return Array.isArray(selectedEmployee.sites) ? selectedEmployee.sites : [];
@@ -417,6 +426,22 @@ export default function ChecklistCreate({ mode = "create" }) {
 
     return getUniqueSites(employees);
   }, [employees, selectedEmployee]);
+  const assignedSiteOptions = useMemo(
+    () =>
+      availableSites.map((site) => ({
+        value: site._id,
+        label: getChecklistSiteName(site),
+      })),
+    [availableSites]
+  );
+  const checklistSourceSiteOptions = useMemo(
+    () =>
+      siteOptions.map((site) => ({
+        value: site._id,
+        label: getChecklistSiteName(site),
+      })),
+    [siteOptions]
+  );
   const defaultApprover = selectedEmployee?.superiorEmployee || null;
   const selectedSourceSite = useMemo(
     () =>
@@ -436,6 +461,20 @@ export default function ChecklistCreate({ mode = "create" }) {
         (checklist) => String(checklist._id) === String(form.dependencyChecklistId)
       ) || null,
     [availableDependencyChecklists, form.dependencyChecklistId]
+  );
+  const dependencyChecklistOptions = useMemo(
+    () =>
+      availableDependencyChecklists.map((checklist) => ({
+        value: checklist._id,
+        label: [
+          checklist.checklistNumber,
+          checklist.checklistName,
+          checklist.assignedToEmployee ? formatEmployeeLabel(checklist.assignedToEmployee) : "",
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      })),
+    [availableDependencyChecklists]
   );
   const customScheduleSummary = useMemo(
     () =>
@@ -964,22 +1003,21 @@ export default function ChecklistCreate({ mode = "create" }) {
                 <div className="row g-3">
             <div className="col-md-6">
               <label className="form-label fw-semibold">Assigned Site</label>
-              <select
+              <SearchableSelect
                 ref={registerFieldRef("employeeAssignedSite")}
                 className={getFieldClassName("form-select", "employeeAssignedSite")}
                 name="employeeAssignedSite"
                 value={form.employeeAssignedSite}
                 onChange={handleFormChange}
+                options={assignedSiteOptions}
+                placeholder="Select Site"
+                emptyLabel="Select Site"
+                searchPlaceholder="Search assigned site"
+                emptyMessage="No sites available."
+                noResultsMessage="No sites match the current search."
                 disabled={Boolean(restrictedChecklistSiteId) || !availableSites.length}
                 required
-              >
-                <option value="">Select Site</option>
-                {availableSites.map((site) => (
-                  <option key={site._id} value={site._id}>
-                    {getChecklistSiteName(site)}
-                  </option>
-                ))}
-              </select>
+              />
               {renderFieldError("employeeAssignedSite")}
               <small className="text-muted">
                 Checklist number is generated from this site. Example: Head Office {"->"} HO - 001.
@@ -987,22 +1025,21 @@ export default function ChecklistCreate({ mode = "create" }) {
             </div>
 
             <div className="col-md-6">
-              <label className="form-label fw-semibold">Assign To Employee</label>
-              <select
+              <label className="form-label fw-semibold">Assigned To Employee</label>
+              <SearchableSelect
                 ref={registerFieldRef("assignedToEmployee")}
                 className={getFieldClassName("form-select", "assignedToEmployee")}
                 name="assignedToEmployee"
                 value={form.assignedToEmployee}
                 onChange={handleFormChange}
+                options={assignedEmployeeOptions}
+                placeholder="Select Employee"
+                emptyLabel="Select Employee"
+                searchPlaceholder="Search employee code or name"
+                emptyMessage="No employees available."
+                noResultsMessage="No employees match the current search."
                 required
-              >
-                <option value="">Select Employee</option>
-                {filteredEmployees.map((employee) => (
-                  <option key={employee._id} value={employee._id}>
-                    {formatEmployeeLabel(employee)}
-                  </option>
-                ))}
-              </select>
+              />
               {renderFieldError("assignedToEmployee")}
               <small className="text-muted">
                 {restrictedChecklistSiteId
@@ -1130,20 +1167,19 @@ export default function ChecklistCreate({ mode = "create" }) {
 
             <div className="col-md-6">
               <label className="form-label fw-semibold">Checklist Source Site</label>
-              <select
+              <SearchableSelect
                 className="form-select"
                 name="checklistSourceSite"
                 value={form.checklistSourceSite}
                 onChange={handleFormChange}
+                options={checklistSourceSiteOptions}
+                placeholder="Select Source Site"
+                emptyLabel="Select Source Site"
+                searchPlaceholder="Search source site"
+                emptyMessage="No source sites available."
+                noResultsMessage="No source sites match the current search."
                 disabled={!siteOptions.length}
-              >
-                <option value="">Select Source Site</option>
-                {siteOptions.map((site) => (
-                  <option key={site._id} value={site._id}>
-                    {getChecklistSiteName(site)}
-                  </option>
-                ))}
-              </select>
+              />
               <small className="text-muted">
                 Optional. Site names match the same list format shown on employee screens.
               </small>
@@ -1187,27 +1223,20 @@ export default function ChecklistCreate({ mode = "create" }) {
                   <label className="form-label fw-semibold">
                     Old Task Number / Previous Task Number
                   </label>
-                  <select
+                  <SearchableSelect
                     ref={registerFieldRef("dependencyChecklistId")}
                     className={getFieldClassName("form-select", "dependencyChecklistId")}
                     name="dependencyChecklistId"
                     value={form.dependencyChecklistId}
                     onChange={handleFormChange}
+                    options={dependencyChecklistOptions}
+                    placeholder="Select Previous Task"
+                    emptyLabel="Select Previous Task"
+                    searchPlaceholder="Search task number, checklist, or employee"
+                    emptyMessage="No previous tasks available."
+                    noResultsMessage="No previous tasks match the current search."
                     required={form.isDependentTask}
-                  >
-                    <option value="">Select Previous Task</option>
-                    {availableDependencyChecklists.map((checklist) => (
-                      <option key={checklist._id} value={checklist._id}>
-                        {[
-                          checklist.checklistNumber,
-                          checklist.checklistName,
-                          formatEmployeeLabel(checklist.assignedToEmployee),
-                        ]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   {renderFieldError("dependencyChecklistId")}
                   <small className="text-muted">
                     This dependent task will be auto-created only once after the selected previous

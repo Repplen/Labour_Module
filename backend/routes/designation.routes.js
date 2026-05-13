@@ -3,6 +3,34 @@ const Designation = require("../models/Designation");
 const { auth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/permissions");
 
+const normalizeName = (value) => String(value || "").trim();
+const duplicateDesignationMessage = "Duplicate designation data found";
+const duplicateDesignationNameError = {
+  field: "name",
+  message: "This designation name already exists.",
+};
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sendDuplicateDesignationResponse = (res) =>
+  res.status(409).json({
+    success: false,
+    message: duplicateDesignationMessage,
+    errors: [duplicateDesignationNameError],
+  });
+
+const findDuplicateDesignation = (name, currentDesignationId = null) => {
+  const filter = {
+    name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+  };
+
+  if (currentDesignationId) {
+    filter._id = { $ne: currentDesignationId };
+  }
+
+  return Designation.exists(filter);
+};
+
 router.get("/", auth, requirePermission("designation_master", "view"), async (req, res) => {
   try {
     const rows = await Designation.find({ isActive: { $ne: false } }).sort({ name: 1 });
@@ -14,14 +42,17 @@ router.get("/", auth, requirePermission("designation_master", "view"), async (re
 
 router.post("/", auth, requirePermission("designation_master", "add"), async (req, res) => {
   try {
-    const name = String(req.body.name || "").trim();
+    const name = normalizeName(req.body.name);
     if (!name) return res.status(400).json({ message: "Designation name is required" });
+
+    const duplicateDesignation = await findDuplicateDesignation(name);
+    if (duplicateDesignation) return sendDuplicateDesignationResponse(res);
 
     const data = await Designation.create({ name });
     res.status(201).json(data);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Designation already exists" });
+      return sendDuplicateDesignationResponse(res);
     }
     res.status(500).json({ message: "Failed to create designation" });
   }
@@ -29,8 +60,11 @@ router.post("/", auth, requirePermission("designation_master", "add"), async (re
 
 router.put("/:id", auth, requirePermission("designation_master", "edit"), async (req, res) => {
   try {
-    const name = String(req.body.name || "").trim();
+    const name = normalizeName(req.body.name);
     if (!name) return res.status(400).json({ message: "Designation name is required" });
+
+    const duplicateDesignation = await findDuplicateDesignation(name, req.params.id);
+    if (duplicateDesignation) return sendDuplicateDesignationResponse(res);
 
     const updated = await Designation.findOneAndUpdate(
       { _id: req.params.id, isActive: { $ne: false } },
@@ -42,7 +76,7 @@ router.put("/:id", auth, requirePermission("designation_master", "edit"), async 
     res.json(updated);
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ message: "Designation already exists" });
+      return sendDuplicateDesignationResponse(res);
     }
     res.status(500).json({ message: "Failed to update designation" });
   }

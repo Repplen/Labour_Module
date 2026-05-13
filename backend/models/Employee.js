@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const {
+  normalizeEmployeeCode,
   normalizeEmployeeEmail,
   normalizeEmployeeMobile,
 } = require("../utils/employeeContactNormalization");
@@ -24,7 +25,8 @@ const employeeSchema = new mongoose.Schema(
     employeeCode: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+      set: normalizeEmployeeCode
     },
 
     employeeName: {
@@ -164,6 +166,16 @@ const employeeSchema = new mongoose.Schema(
   },
   {
     timestamps: true
+  }
+);
+
+employeeSchema.index(
+  { employeeCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      employeeCode: { $type: "string", $gt: "" }
+    }
   }
 );
 

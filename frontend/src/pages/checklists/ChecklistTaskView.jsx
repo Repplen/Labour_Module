@@ -127,6 +127,7 @@ const AUDIO_MIME_TYPE_CANDIDATES = [
 ];
 
 const VOICE_RECORDING_START_ERROR = "Unable to start voice recording on this browser.";
+const MAX_CHECKLIST_ATTACHMENTS = 10;
 
 const getSupportedAudioMimeType = () => {
   if (
@@ -159,6 +160,19 @@ const formatRecordingDuration = (value) => {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
 };
+
+const formatLocalFileSize = (value) => {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(mb >= 1 ? 1 : 2)} MB`;
+};
+
+const getLocalAttachmentKey = (file) =>
+  [file?.name, file?.size, file?.lastModified, file?.type]
+    .map((value) => String(value || ""))
+    .join("|");
 
 const PDF_ATTACHMENT_EXTENSIONS = new Set(["pdf"]);
 const SPREADSHEET_ATTACHMENT_EXTENSIONS = new Set(["xls", "xlsx", "csv"]);
@@ -320,6 +334,7 @@ export default function ChecklistTaskView() {
   const recordingCancelRef = useRef(false);
   const recordingTimerRef = useRef(null);
   const recordingSecondsRef = useRef(0);
+  const attachmentInputRef = useRef(null);
 
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -505,18 +520,49 @@ export default function ChecklistTaskView() {
   };
 
   const handleAttachmentChange = (event) => {
-    const files = event.target.files || [];
-    const validationMessage = validateFiles(files, GENERAL_ATTACHMENT_OPTIONS);
+    const selectedFiles = Array.from(event.target.files || []);
+    const validationMessage = validateFiles(selectedFiles, GENERAL_ATTACHMENT_OPTIONS);
 
     if (validationMessage) {
       alert(validationMessage);
       event.target.value = "";
-      setAttachments([]);
       return;
     }
 
-    setAttachments(Array.from(files));
+    const existingFileKeys = new Set(attachments.map((file) => getLocalAttachmentKey(file)));
+    const nextAttachments = [...attachments];
+
+    selectedFiles.forEach((file) => {
+      const fileKey = getLocalAttachmentKey(file);
+      if (!existingFileKeys.has(fileKey)) {
+        existingFileKeys.add(fileKey);
+        nextAttachments.push(file);
+      }
+    });
+
+    const reservedVoiceSlot = recordedVoiceFile ? 1 : 0;
+    if (nextAttachments.length + reservedVoiceSlot > MAX_CHECKLIST_ATTACHMENTS) {
+      alert(`You can attach up to ${MAX_CHECKLIST_ATTACHMENTS} files per submission.`);
+      event.target.value = "";
+      return;
+    }
+
+    setAttachments(nextAttachments);
     setVoiceRecordingError("");
+    event.target.value = "";
+  };
+
+  const removeAttachment = (attachmentIndex) => {
+    setAttachments((currentAttachments) =>
+      currentAttachments.filter((_, index) => index !== attachmentIndex)
+    );
+  };
+
+  const clearAttachments = () => {
+    setAttachments([]);
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
   };
 
   const buildVoiceFileFromChunks = (chunks, mimeType) => {
@@ -536,6 +582,13 @@ export default function ChecklistTaskView() {
 
     if (validationMessage) {
       setVoiceRecordingError(validationMessage);
+      return;
+    }
+
+    if (attachments.length + 1 > MAX_CHECKLIST_ATTACHMENTS) {
+      setVoiceRecordingError(
+        `You can attach up to ${MAX_CHECKLIST_ATTACHMENTS} files per submission.`
+      );
       return;
     }
 
@@ -1069,23 +1122,73 @@ export default function ChecklistTaskView() {
 
             {canSubmit ? (
               <div className="col-md-4">
-                <label className="form-label fw-semibold">Attachments</label>
+                <label className="form-label fw-semibold" htmlFor="checklist-task-attachments">
+                  Attachments
+                </label>
                 <input
+                  id="checklist-task-attachments"
+                  ref={attachmentInputRef}
                   type="file"
                   multiple
-                  className="form-control"
+                  className="visually-hidden"
                   accept={GENERAL_ATTACHMENT_ACCEPT}
                   onChange={handleAttachmentChange}
                 />
 
-                <div className="small text-muted mt-2">
-                  Upload supporting files along with the submission.
-                </div>
-                {attachments.length ? (
-                  <div className="small text-muted mt-1">
-                    {attachments.length} file{attachments.length === 1 ? "" : "s"} selected.
+                <div className="checklist-attachment-picker">
+                  <div className="d-flex flex-wrap align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={
+                        saving ||
+                        attachments.length + (recordedVoiceFile ? 1 : 0) >=
+                          MAX_CHECKLIST_ATTACHMENTS
+                      }
+                    >
+                      Add Attachments
+                    </button>
+                    {attachments.length ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={clearAttachments}
+                        disabled={saving}
+                      >
+                        Clear Files
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
+
+                  {attachments.length ? (
+                    <ul className="checklist-attachment-list mt-2">
+                      {attachments.map((file, index) => (
+                        <li
+                          className="checklist-attachment-list__item"
+                          key={`${getLocalAttachmentKey(file)}-${index}`}
+                        >
+                          <div className="checklist-attachment-list__meta">
+                            <div className="fw-semibold text-break">
+                              {normalizeTaskText(file.name) || `Attachment ${index + 1}`}
+                            </div>
+                            <div className="small text-muted">
+                              {formatLocalFileSize(file.size)}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => removeAttachment(index)}
+                            disabled={saving}
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
 
                 <div className="checklist-voice-recorder mt-3">
                   {recordingState === "recording" ? (
