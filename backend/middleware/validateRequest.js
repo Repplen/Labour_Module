@@ -3,6 +3,7 @@ const { createHttpError } = require("../utils/httpError");
 
 const buildValidationErrors = (issues = []) =>
   issues.map((issue) => ({
+    field: Array.isArray(issue.path) ? issue.path.join(".") : "",
     path: Array.isArray(issue.path) ? issue.path.join(".") : "",
     message: issue.message,
   }));

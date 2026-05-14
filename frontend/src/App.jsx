@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ChecklistAssistantWidget from "./components/ChecklistAssistantWidget";
+import { ModuleSettingsProvider } from "./context/ModuleSettingsContext";
 import { PermissionProvider } from "./context/PermissionContext";
+import { useModuleSettings } from "./context/useModuleSettings";
 import { usePermissions } from "./context/usePermissions";
 
 import AccessDenied from "./pages/AccessDenied";
@@ -19,6 +21,7 @@ import OwnTasks from "./pages/OwnTasks";
 import ChatModule from "./pages/ChatModule";
 import RoleDashboard from "./pages/RoleDashboard";
 import RolePermissionSetup from "./pages/RolePermissionSetup";
+import ModuleSettings from "./pages/ModuleSettings";
 import UsersAdmin from "./pages/UsersAdmin";
 import IntroWelcomeScreen from "./pages/IntroWelcomeScreen";
 import ComplaintsDashboard from "./pages/complaints/ComplaintsDashboard";
@@ -59,6 +62,16 @@ export function FullPageLoader() {
   return <div className="container py-5 text-center">Loading workspace permissions...</div>;
 }
 
+export function ModuleDisabledPage() {
+  return (
+    <div className="container py-5">
+      <div className="alert alert-warning mb-0" role="alert">
+        This module is currently disabled.
+      </div>
+    </div>
+  );
+}
+
 export function PrivateRoute({ children }) {
   if (!hasSession()) {
     return <Navigate to="/login" replace />;
@@ -95,6 +108,11 @@ export function WelcomeRoute({ children }) {
 export function PermissionRoute({ children, moduleKey, actionKey = "view", anyOf = [] }) {
   const location = useLocation();
   const { loading, can, canAny } = usePermissions();
+  const {
+    areAllPermissionModulesDisabled,
+    isPermissionModuleEnabled,
+    loading: moduleSettingsLoading,
+  } = useModuleSettings();
 
   if (!hasSession()) {
     return <Navigate to="/login" replace />;
@@ -104,8 +122,15 @@ export function PermissionRoute({ children, moduleKey, actionKey = "view", anyOf
     return <Navigate to="/welcome" replace />;
   }
 
-  if (loading) {
+  if (loading || moduleSettingsLoading) {
     return <FullPageLoader />;
+  }
+
+  if (
+    (moduleKey && !isPermissionModuleEnabled(moduleKey)) ||
+    (!moduleKey && areAllPermissionModulesDisabled(anyOf))
+  ) {
+    return <ModuleDisabledPage />;
   }
 
   const isAllowed = anyOf.length ? canAny(anyOf) : can(moduleKey, actionKey);
@@ -128,12 +153,13 @@ function MyProfileRedirect() {
 
 function AuthenticatedHomeRedirect() {
   const { loading, getHomePath, getVisibleModules } = usePermissions();
+  const { isRouteModuleEnabled, loading: moduleSettingsLoading } = useModuleSettings();
 
   if (!hasSession()) {
     return <Navigate to="/login" replace />;
   }
 
-  if (loading) {
+  if (loading || moduleSettingsLoading) {
     return <FullPageLoader />;
   }
 
@@ -142,7 +168,9 @@ function AuthenticatedHomeRedirect() {
   );
   const resolvedHomePath = getHomePath();
   const targetPath =
-    resolvedHomePath && (resolvedHomePath !== "/dashboard" || !firstVisibleModule)
+    resolvedHomePath &&
+    isRouteModuleEnabled(resolvedHomePath) &&
+    (resolvedHomePath !== "/dashboard" || !firstVisibleModule)
       ? resolvedHomePath
       : firstVisibleModule?.routePath || "/access-denied";
 
@@ -231,6 +259,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "overview_1", actionKey: "view" },
+                  { moduleKey: "overview_1", actionKey: "report_view" },
                   { moduleKey: "dashboard_analytics", actionKey: "view" },
                   { moduleKey: "dashboard_analytics", actionKey: "report_view" },
                 ]}
@@ -254,6 +284,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "overview_1", actionKey: "view" },
+                  { moduleKey: "overview_1", actionKey: "report_view" },
                   { moduleKey: "dashboard_analytics", actionKey: "view" },
                   { moduleKey: "dashboard_analytics", actionKey: "report_view" },
                 ]}
@@ -278,6 +310,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "overview_2", actionKey: "view" },
+                  { moduleKey: "overview_2", actionKey: "report_view" },
                   { moduleKey: "dashboard_analytics", actionKey: "view" },
                   { moduleKey: "dashboard_analytics", actionKey: "report_view" },
                 ]}
@@ -304,6 +338,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "overview_2", actionKey: "view" },
+                  { moduleKey: "overview_2", actionKey: "report_view" },
                   { moduleKey: "dashboard_analytics", actionKey: "view" },
                   { moduleKey: "dashboard_analytics", actionKey: "report_view" },
                 ]}
@@ -331,6 +367,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "dashboard_summary", actionKey: "view" },
+                  { moduleKey: "dashboard_summary", actionKey: "report_view" },
                   { moduleKey: "dashboard_analytics", actionKey: "view" },
                   { moduleKey: "dashboard_analytics", actionKey: "report_view" },
                 ]}
@@ -402,7 +440,12 @@ function AppRoutes() {
           <Route
             path="/masters/departments"
             element={
-              <PermissionRoute moduleKey="department_master">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "department_master", actionKey: "view" },
+                  { moduleKey: "sub_department_master", actionKey: "view" },
+                ]}
+              >
                 <DepartmentMaster />
               </PermissionRoute>
             }
@@ -429,7 +472,12 @@ function AppRoutes() {
           <Route
             path="/your-checklist"
             element={
-              <PermissionRoute moduleKey="assigned_checklists" actionKey="view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "your_checklist", actionKey: "view" },
+                  { moduleKey: "assigned_checklists", actionKey: "view" },
+                ]}
+              >
                 <YourChecklist />
               </PermissionRoute>
             }
@@ -502,7 +550,12 @@ function AppRoutes() {
           <Route
             path="/checklists/tasks"
             element={
-              <PermissionRoute moduleKey="checklist_master" actionKey="view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "tasks", actionKey: "view" },
+                  { moduleKey: "checklist_master", actionKey: "view" },
+                ]}
+              >
                 <ChecklistTasksAdmin />
               </PermissionRoute>
             }
@@ -557,6 +610,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "admin_approvals", actionKey: "view" },
+                  { moduleKey: "admin_approvals", actionKey: "approve" },
                   { moduleKey: "checklist_master", actionKey: "approve" },
                   { moduleKey: "checklist_master", actionKey: "reject" },
                 ]}
@@ -596,7 +651,12 @@ function AppRoutes() {
           <Route
             path="/complaints"
             element={
-              <PermissionRoute moduleKey="complaints" actionKey="view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "complaint_dashboard", actionKey: "view" },
+                  { moduleKey: "complaints", actionKey: "view" },
+                ]}
+              >
                 <ComplaintsDashboard />
               </PermissionRoute>
             }
@@ -605,7 +665,13 @@ function AppRoutes() {
           <Route
             path="/complaints/reports"
             element={
-              <PermissionRoute moduleKey="complaints" actionKey="view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "complaint_report", actionKey: "view" },
+                  { moduleKey: "complaint_report", actionKey: "report_view" },
+                  { moduleKey: "complaints", actionKey: "view" },
+                ]}
+              >
                 <ComplaintsReport />
               </PermissionRoute>
             }
@@ -638,6 +704,8 @@ function AppRoutes() {
             element={
               <PermissionRoute
                 anyOf={[
+                  { moduleKey: "checklist_report", actionKey: "view" },
+                  { moduleKey: "checklist_report", actionKey: "report_view" },
                   { moduleKey: "reports", actionKey: "view" },
                   { moduleKey: "reports", actionKey: "report_view" },
                 ]}
@@ -650,7 +718,15 @@ function AppRoutes() {
           <Route
             path="/reports/polls"
             element={
-              <PermissionRoute moduleKey="poll_master" actionKey="report_view">
+              <PermissionRoute
+                anyOf={[
+                  { moduleKey: "poll_results", actionKey: "view" },
+                  { moduleKey: "poll_results", actionKey: "report_view" },
+                  { moduleKey: "poll_report", actionKey: "view" },
+                  { moduleKey: "poll_report", actionKey: "report_view" },
+                  { moduleKey: "poll_master", actionKey: "report_view" },
+                ]}
+              >
                 <PollReport />
               </PermissionRoute>
             }
@@ -729,6 +805,15 @@ function AppRoutes() {
             element={
               <PermissionRoute moduleKey="role_permission_setup" actionKey="view">
                 <RolePermissionSetup />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/module-settings"
+            element={
+              <PermissionRoute moduleKey="module_settings" actionKey="view">
+                <ModuleSettings />
               </PermissionRoute>
             }
           />
@@ -820,8 +905,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <PermissionProvider>
-      <AppRoutes />
-    </PermissionProvider>
+    <ModuleSettingsProvider>
+      <PermissionProvider>
+        <AppRoutes />
+      </PermissionProvider>
+    </ModuleSettingsProvider>
   );
 }

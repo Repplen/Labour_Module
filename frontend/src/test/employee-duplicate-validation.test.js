@@ -47,7 +47,9 @@ describe("employee duplicate validation", () => {
     expect(
       getApiDuplicateEmployeeErrors({
         response: {
+          status: 409,
           data: {
+            message: "Duplicate employee data found",
             errors: [
               {
                 field: "employeeCode",
@@ -64,5 +66,24 @@ describe("employee duplicate validation", () => {
       email: employeeDuplicateMessages.email,
       mobile: employeeDuplicateMessages.mobile,
     });
+  });
+
+  test("does not treat format validation errors as duplicate errors", () => {
+    expect(
+      getApiDuplicateEmployeeErrors({
+        response: {
+          status: 400,
+          data: {
+            message: "Validation failed",
+            errors: [
+              {
+                field: "email",
+                message: "Please enter a valid email address.",
+              },
+            ],
+          },
+        },
+      })
+    ).toEqual({});
   });
 });

@@ -5,6 +5,7 @@ import {
   getPostLoginDestination,
   getStoredUser,
 } from "../utils/postLoginWelcome";
+import { useModuleSettings } from "./useModuleSettings";
 import PermissionContext from "./permissionContextStore";
 
 const hasSession = () => Boolean(localStorage.getItem("token")) && Boolean(getStoredUser());
@@ -58,6 +59,7 @@ const buildPermissionState = (responseData = {}, fallbackUser = getStoredUser())
 };
 
 export function PermissionProvider({ children }) {
+  const { isPermissionModuleEnabled } = useModuleSettings();
   const [state, setState] = useState(() => ({
     ...buildDefaultState(),
     loading: hasSession(),
@@ -105,6 +107,8 @@ export function PermissionProvider({ children }) {
     );
 
     const can = (moduleKey, actionKey = "view") => {
+      if (!isPermissionModuleEnabled(moduleKey)) return false;
+
       const permissionRow = state.permissions?.[moduleKey];
       if (!permissionRow) return false;
 
@@ -129,7 +133,9 @@ export function PermissionProvider({ children }) {
 
     const getModule = (moduleKey) => moduleMap.get(moduleKey) || null;
     const getVisibleModules = () =>
-      (state.modules || []).filter((moduleItem) => can(moduleItem.key, "view"));
+      (state.modules || []).filter(
+        (moduleItem) => isPermissionModuleEnabled(moduleItem.key) && can(moduleItem.key, "view")
+      );
     const getHomePath = () =>
       state.homePath || state.user?.homePath || getPostLoginDestination(state.user);
 
@@ -145,7 +151,7 @@ export function PermissionProvider({ children }) {
         setState(buildPermissionState(response.data));
       },
     };
-  }, [state]);
+  }, [isPermissionModuleEnabled, state]);
 
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;
 }

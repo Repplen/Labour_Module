@@ -38,4 +38,15 @@ describe("auth validators", () => {
       })
     ).toThrow("Password must be at least 6 characters");
   });
+
+  test("rejects user names with numbers and invalid email formats", () => {
+    expect(() =>
+      updateUserSchema.parse({
+        name: "kmnjnj7686778",
+        email: "1001@!#ghygmail.com",
+        role: "user",
+        siteId: "",
+      })
+    ).toThrow("Name can contain only letters and spaces.");
+  });
 });

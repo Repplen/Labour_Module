@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import WelcomeCard from "../components/WelcomeCard";
+import { useModuleSettings } from "../context/useModuleSettings";
 import welcomeBackground from "../images/welcome.jpg";
 import {
   dismissPostLoginWelcome,
@@ -86,6 +87,7 @@ function CountUpNumber({ value, duration = 900 }) {
 
 export default function WelcomeScreen() {
   const navigate = useNavigate();
+  const { isRouteModuleEnabled } = useModuleSettings();
   const storedUser = useMemo(() => getStoredUser() || {}, []);
   const [summary, setSummary] = useState(() => ({
     userName: storedUser.name || "User",
@@ -182,7 +184,8 @@ export default function WelcomeScreen() {
   const handleContinue = () => {
     if (isContinueLocked) return;
     dismissPostLoginWelcome();
-    navigate(getPostLoginDestination(storedUser), { replace: true });
+    const destination = getPostLoginDestination(storedUser);
+    navigate(isRouteModuleEnabled(destination) ? destination : "/", { replace: true });
   };
 
   return (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import SearchableCheckboxSelector from "../../components/SearchableCheckboxSelector";
 import { formatSiteLabel } from "../../utils/siteDisplay";
+import { getApiFieldError, validateMasterName } from "../../utils/masterNameValidation";
 
 const parseNames = (value) => {
   const seen = new Set();
@@ -80,7 +81,7 @@ const getApiNameDuplicateError = (error) => {
     (row) => String(row?.field || row?.path || "").trim() === "name"
   );
 
-  if (hasNameError || error?.response?.status === 409) {
+  if (error?.response?.status === 409 && hasNameError) {
     return duplicateSiteMessage;
   }
 
@@ -178,8 +179,10 @@ export default function SiteMaster() {
     [employeeOptions]
   );
   const clientNameError = useMemo(() => {
+    const validationMessage = validateMasterName(name, "Site");
+    if (validationMessage) return validationMessage;
+
     const nextName = normalizeMasterName(name);
-    if (!nextName) return "";
 
     const hasDuplicate = sites.some(
       (site) =>
@@ -190,7 +193,17 @@ export default function SiteMaster() {
     return hasDuplicate ? duplicateSiteMessage : "";
   }, [editingId, name, sites]);
   const nameError = clientNameError || serverNameError;
-  const hasDuplicateError = Boolean(nameError);
+  const hasNameError = Boolean(nameError);
+  const subNameError = useMemo(() => {
+    const names = parseNames(subName);
+    if (!names.length) return "";
+
+    const invalidName = names
+      .map((item) => validateMasterName(item, "Sub site"))
+      .find(Boolean);
+
+    return invalidName || "";
+  }, [subName]);
 
   const resetForm = () => {
     setCompanyName("");
@@ -209,11 +222,11 @@ export default function SiteMaster() {
     const trimmedName = name.trim();
 
     if (!trimmedCompanyName) return alert("Select company name");
-    if (!trimmedName) return alert("Enter site name");
+    if (!trimmedName || hasNameError) return;
     if (names.length > 1) {
       return alert("Only one site name can be added at a time");
     }
-    if (hasDuplicateError) return;
+    if (hasNameError) return;
 
     setLoading(true);
     setServerNameError("");
@@ -244,6 +257,11 @@ export default function SiteMaster() {
       const duplicateError = getApiNameDuplicateError(err);
       if (duplicateError) {
         setServerNameError(duplicateError);
+        return;
+      }
+      const fieldError = getApiFieldError(err);
+      if (fieldError) {
+        setServerNameError(fieldError);
         return;
       }
 
@@ -324,7 +342,7 @@ export default function SiteMaster() {
     if (!selectedSiteId) return;
 
     const names = parseNames(subName);
-    if (!names.length) return alert("Enter sub site name");
+    if (!names.length || subNameError) return;
     if (!subHeadEmployeeIds.length && !legacySubHeadNames.length) {
       return alert("Select at least one sub site head");
     }
@@ -522,7 +540,7 @@ export default function SiteMaster() {
           <button
             className="btn btn-success"
             onClick={saveSite}
-            disabled={loading || hasDuplicateError}
+          disabled={loading || hasNameError}
           >
             {loading ? "Saving..." : editingId ? "Update" : "Save"}
           </button>
@@ -612,7 +630,7 @@ export default function SiteMaster() {
           <div className="d-flex flex-column flex-lg-row align-items-start gap-2 mb-3">
             <div className="flex-grow-1">
               <textarea
-                className="form-control mb-2"
+                className={`form-control${subNameError ? " is-invalid" : " mb-2"}`}
                 placeholder={
                   subEditingId
                     ? `Enter Sub Site Master ${currentSubLevel} name`
@@ -620,8 +638,15 @@ export default function SiteMaster() {
                 }
                 value={subName}
                 onChange={(e) => setSubName(e.target.value)}
+                aria-invalid={subNameError ? "true" : "false"}
+                aria-describedby={subNameError ? "sub-site-name-error" : undefined}
                 rows={2}
               />
+              {subNameError ? (
+                <div className="invalid-feedback d-block mb-2" id="sub-site-name-error">
+                  {subNameError}
+                </div>
+              ) : null}
               <SearchableCheckboxSelector
                 label="Sub Site Heads"
                 helperText="Pick one or more sub site heads from the employee master."
@@ -645,7 +670,11 @@ export default function SiteMaster() {
               )}
             </div>
             <div className="d-flex flex-wrap gap-2">
-              <button className="btn btn-success" onClick={saveSubSite} disabled={subLoading}>
+              <button
+                className="btn btn-success"
+                onClick={saveSubSite}
+                disabled={subLoading || Boolean(subNameError)}
+              >
                 {subLoading ? "Saving..." : subEditingId ? "Update" : "Add"}
               </button>
               {subEditingId && (

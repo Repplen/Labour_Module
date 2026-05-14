@@ -5,9 +5,14 @@ const Employee = require("../models/Employee");
 const { auth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/permissions");
 const { buildSiteScopeFilter } = require("../services/accessScope.service");
+const {
+  normalizeMasterName,
+  sendMasterNameValidationError,
+  validateMasterName,
+} = require("../utils/masterNameValidation");
 
 const MAX_SUB_LEVELS = 4;
-const normalizeName = (value) => String(value || "").trim();
+const normalizeName = normalizeMasterName;
 const duplicateSiteMessage = "Duplicate site data found";
 const duplicateSiteNameError = {
   field: "name",
@@ -198,8 +203,16 @@ router.get("/", auth, requirePermission("site_master", "view"), async (req, res)
 
 router.post("/", auth, requirePermission("site_master", "add"), async (req, res) => {
   try {
-    const companyName = normalizeName(req.body.companyName);
-    const { names, hasBulkPayload } = parseNamesPayload(req.body);
+    const { name: companyName, error: companyNameError } = validateMasterName(
+      req.body.companyName,
+      "Company"
+    );
+    const { names: rawNames, hasBulkPayload } = parseNamesPayload(req.body);
+    const siteNameValidationResults = rawNames.map((item) =>
+      validateMasterName(item, "Site")
+    );
+    const invalidSiteName = siteNameValidationResults.find((result) => result.error);
+    const names = siteNameValidationResults.map((result) => result.name);
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
@@ -211,13 +224,12 @@ router.post("/", auth, requirePermission("site_master", "add"), async (req, res)
       requiredMessage: "Site lead name is required",
     });
 
-    if (!companyName) {
-      return res.status(400).json({ message: "Company name is required" });
-    }
+    if (companyNameError) return sendMasterNameValidationError(res, "companyName", companyNameError);
 
     if (!names.length) {
-      return res.status(400).json({ message: "Site name is required" });
+      return sendMasterNameValidationError(res, "name", "Site name is required.");
     }
+    if (invalidSiteName) return sendMasterNameValidationError(res, "name", invalidSiteName.error);
 
     if (hasBulkPayload && names.length > 1) {
       return res.status(400).json({
@@ -265,8 +277,11 @@ router.put("/:id", auth, requirePermission("site_master", "edit"), async (req, r
       return res.status(404).json({ message: "Site not found" });
     }
 
-    const companyName = normalizeName(req.body.companyName);
-    const name = normalizeName(req.body.name);
+    const { name: companyName, error: companyNameError } = validateMasterName(
+      req.body.companyName,
+      "Company"
+    );
+    const { name, error: nameError } = validateMasterName(req.body.name, "Site");
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
@@ -277,8 +292,8 @@ router.put("/:id", auth, requirePermission("site_master", "edit"), async (req, r
       invalidSelectionMessage: "One or more selected site leads are invalid",
       requiredMessage: "Site lead name is required",
     });
-    if (!companyName) return res.status(400).json({ message: "Company name is required" });
-    if (!name) return res.status(400).json({ message: "Site name is required" });
+    if (companyNameError) return sendMasterNameValidationError(res, "companyName", companyNameError);
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (headError) return res.status(400).json({ message: headError });
     if (siteLeadError) return res.status(400).json({ message: siteLeadError });
 
@@ -337,15 +352,19 @@ router.post("/:id/sub-sites", auth, requirePermission("site_master", "add"), asy
       return res.status(404).json({ message: "Site not found" });
     }
 
-    const { names, hasBulkPayload } = parseNamesPayload(req.body);
+    const { names: rawNames, hasBulkPayload } = parseNamesPayload(req.body);
+    const validationResults = rawNames.map((item) => validateMasterName(item, "Sub site"));
+    const invalidName = validationResults.find((result) => result.error);
+    const names = validationResults.map((result) => result.name);
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
       requireAtLeastOne: true,
     });
     if (!names.length) {
-      return res.status(400).json({ message: "Sub site name is required" });
+      return sendMasterNameValidationError(res, "name", "Sub site name is required.");
     }
+    if (invalidName) return sendMasterNameValidationError(res, "name", invalidName.error);
     if (headError) {
       return res.status(400).json({ message: headError });
     }
@@ -404,13 +423,13 @@ router.put("/:id/sub-sites/:subId", auth, requirePermission("site_master", "edit
       return res.status(404).json({ message: "Site not found" });
     }
 
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateMasterName(req.body.name, "Sub site");
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
       requireAtLeastOne: true,
     });
-    if (!name) return res.status(400).json({ message: "Sub site name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (headError) return res.status(400).json({ message: headError });
 
     const row = await Site.findById(req.params.id);

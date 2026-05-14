@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import SearchableCheckboxSelector from "../../components/SearchableCheckboxSelector";
+import { getApiFieldError, validateCompanyName } from "../../utils/masterNameValidation";
 
 const getEmployeeDirectorLabel = (employee) => {
   const code = String(employee?.employeeCode || "").trim();
@@ -65,7 +66,7 @@ const getApiCompanyNameDuplicateError = (error) => {
     (row) => String(row?.field || row?.path || "").trim() === "name"
   );
 
-  if (hasNameError || error?.response?.status === 409) {
+  if (error?.response?.status === 409 && hasNameError) {
     return duplicateCompanyMessage;
   }
 
@@ -100,8 +101,10 @@ export default function CompanyMaster() {
     [employees]
   );
   const clientNameError = useMemo(() => {
+    const validationMessage = validateCompanyName(name);
+    if (validationMessage) return validationMessage;
+
     const nextName = normalizeCompanyName(name);
-    if (!nextName) return "";
 
     const hasDuplicate = companies.some(
       (company) =>
@@ -112,7 +115,7 @@ export default function CompanyMaster() {
     return hasDuplicate ? duplicateCompanyMessage : "";
   }, [companies, editingId, name]);
   const nameError = clientNameError || serverNameError;
-  const hasDuplicateError = Boolean(nameError);
+  const hasNameError = Boolean(nameError);
 
   const fetchCompanies = async () => {
     try {
@@ -144,8 +147,7 @@ export default function CompanyMaster() {
 
   const saveCompany = async () => {
     const trimmedName = name.trim();
-    if (!trimmedName) return alert("Enter company name");
-    if (hasDuplicateError) return;
+    if (!trimmedName || hasNameError) return;
 
     setLoading(true);
     setServerNameError("");
@@ -169,6 +171,11 @@ export default function CompanyMaster() {
       const duplicateError = getApiCompanyNameDuplicateError(err);
       if (duplicateError) {
         setServerNameError(duplicateError);
+        return;
+      }
+      const fieldError = getApiFieldError(err);
+      if (fieldError) {
+        setServerNameError(fieldError);
         return;
       }
 
@@ -274,7 +281,7 @@ export default function CompanyMaster() {
           <button
             className="btn btn-success"
             onClick={saveCompany}
-            disabled={loading || hasDuplicateError}
+            disabled={loading || hasNameError}
           >
             {loading ? "Saving..." : editingId ? "Update Company" : "Save Company"}
           </button>

@@ -231,7 +231,9 @@ exports.createUser = async (req, res) => {
     const exists = await User.findOne({ email: normalizedEmail });
     if (exists) {
       return res.status(409).json({
+        success: false,
         message: "User already exists with this email",
+        errors: [{ field: "email", message: "User already exists with this email" }],
       });
     }
 
@@ -323,7 +325,9 @@ exports.updateUser = async (req, res) => {
 
     if (existing) {
       return res.status(409).json({
+        success: false,
         message: "User already exists with this email",
+        errors: [{ field: "email", message: "User already exists with this email" }],
       });
     }
 

@@ -52,10 +52,14 @@ const featuredShortcutOrder = [
   "designation_master",
   "checklist_master",
   "approval_inbox",
+  "employee_attendance",
   "complaints",
+  "complaint_dashboard",
   "reports",
+  "checklist_report",
   "user_management",
   "role_permission_setup",
+  "module_settings",
 ];
 
 export default function RoleDashboard() {
@@ -110,11 +114,16 @@ export default function RoleDashboard() {
         return Number(left.order || 0) - Number(right.order || 0);
       });
 
+      const uniqueRouteModules = sortedModules.filter(
+        (moduleItem, index, rows) =>
+          rows.findIndex((row) => row.routePath === moduleItem.routePath) === index
+      );
+
       if (role?.dashboardType === "admin") {
-        return sortedModules.slice(0, 8);
+        return uniqueRouteModules.slice(0, 8);
       }
 
-      return sortedModules;
+      return uniqueRouteModules;
     },
     [canAny, getVisibleModules, modules, role?.dashboardType]
   );

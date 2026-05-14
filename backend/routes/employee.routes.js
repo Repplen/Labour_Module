@@ -2,6 +2,7 @@ const express = require("express");
 const controller = require("../controllers/employee.controller");
 const upload = require("../middleware/upload");
 const { auth } = require("../middleware/auth");
+const { moduleAnyEnabled, moduleEnabled } = require("../middleware/moduleEnabled");
 const { requireAnyPermission, requirePermission } = require("../middleware/permissions");
 const { validateRequest } = require("../middleware/validateRequest");
 const {
@@ -13,9 +14,16 @@ const {
 
 const router = express.Router();
 
-router.get("/", auth, requirePermission("employee_master", "view"), controller.getEmployees);
+router.get(
+  "/",
+  moduleEnabled("employee_master"),
+  auth,
+  requirePermission("employee_master", "view"),
+  controller.getEmployees
+);
 router.get(
   "/export/excel",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "export"),
   controller.exportEmployeesExcel
@@ -23,6 +31,7 @@ router.get(
 router.get("/qr/:qrToken", controller.getEmployeeByQrToken);
 router.post(
   "/:id/qr",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "view"),
   validateRequest({ params: idParamSchema }),
@@ -30,6 +39,7 @@ router.post(
 );
 router.patch(
   "/:id/qr/access",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "edit"),
   validateRequest({ params: idParamSchema }),
@@ -37,6 +47,7 @@ router.patch(
 );
 router.get(
   "/:id",
+  moduleAnyEnabled(["employee_master", "own_profile"]),
   auth,
   requireAnyPermission([
     { moduleKey: "employee_master", actionKey: "view" },
@@ -47,6 +58,7 @@ router.get(
 );
 router.post(
   "/",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "add"),
   upload.single("photo"),
@@ -55,6 +67,7 @@ router.post(
 );
 router.put(
   "/:id",
+  moduleAnyEnabled(["employee_master", "own_profile"]),
   auth,
   requirePermission("employee_master", "edit"),
   upload.single("photo"),
@@ -63,6 +76,7 @@ router.put(
 );
 router.post(
   "/bulk-delete",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "delete"),
   validateRequest({ body: employeeBulkDeleteSchema }),
@@ -70,6 +84,7 @@ router.post(
 );
 router.delete(
   "/:id",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "delete"),
   validateRequest({ params: idParamSchema }),
@@ -77,6 +92,7 @@ router.delete(
 );
 router.patch(
   "/:id/status",
+  moduleEnabled("employee_master"),
   auth,
   requirePermission("employee_master", "status_update"),
   validateRequest({ params: idParamSchema }),

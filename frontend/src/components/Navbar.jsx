@@ -12,6 +12,7 @@ import {
 } from "../utils/chatDisplay";
 import { clearPostLoginWelcomeSession } from "../utils/postLoginWelcome";
 import { usePermissions } from "../context/usePermissions";
+import { useModuleSettings } from "../context/useModuleSettings";
 
 const emptyReminderState = {
   counts: {
@@ -94,8 +95,10 @@ function BellIcon() {
 
 export default function Navbar() {
   const { can, canAny, getHomePath, role: resolvedRole } = usePermissions();
+  const { isModuleEnabled } = useModuleSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  const navbarRef = useRef(null);
   const desktopNotificationMenuRef = useRef(null);
   const mobileNotificationMenuRef = useRef(null);
   const shownBrowserNotificationKeysRef = useRef(new Set());
@@ -103,8 +106,10 @@ export default function Navbar() {
   const role = String(user?.role || "").trim().toLowerCase();
   const isAdmin = role === "admin";
   const isEmployee = role === "employee";
-  const canViewAssignedPollNotifications = can("assigned_polls", "view");
-  const canViewComplaintNotifications = can("complaints", "view");
+  const isPollingEnabled = isModuleEnabled("polling");
+  const isComplaintsEnabled = isModuleEnabled("complaints");
+  const canViewAssignedPollNotifications = isPollingEnabled && can("assigned_polls", "view");
+  const canViewComplaintNotifications = isComplaintsEnabled && can("complaints", "view");
   const hasRestrictedChecklistAccess =
     !isAdmin &&
     !isEmployee &&
@@ -139,14 +144,14 @@ export default function Navbar() {
     isAdmin
       ? Number(feedbackNotificationData.counts.unread || 0) +
         Number(requestNotificationData.counts.unread || 0) +
-        Number(complaintNotificationData.counts.unread || 0)
+        (isComplaintsEnabled ? Number(complaintNotificationData.counts.unread || 0) : 0)
       : hasRestrictedChecklistAccess
       ? Number(requestNotificationData.counts.unread || 0) +
-        Number(complaintNotificationData.counts.unread || 0)
+        (isComplaintsEnabled ? Number(complaintNotificationData.counts.unread || 0) : 0)
       : Number(reminderNotificationData.counts.total || 0) +
         Number(chatNotificationData.counts.mentions || 0) +
-        Number(pollNotificationData.counts.total || 0) +
-        Number(complaintNotificationData.counts.unread || 0);
+        (isPollingEnabled ? Number(pollNotificationData.counts.total || 0) : 0) +
+        (isComplaintsEnabled ? Number(complaintNotificationData.counts.unread || 0) : 0);
   const shouldShowNotifications =
     isEmployee || isAdmin || hasRestrictedChecklistAccess || canViewComplaintNotifications;
 
@@ -161,7 +166,11 @@ export default function Navbar() {
           : null,
         can("checklist_master", "view")
           ? { to: "/checklists", label: "Checklist Master" }
-          : !can("checklist_master", "view") && can("assigned_checklists", "view")
+          : !can("checklist_master", "view") &&
+            canAny([
+              { moduleKey: "your_checklist", actionKey: "view" },
+              { moduleKey: "assigned_checklists", actionKey: "view" },
+            ])
           ? { to: "/your-checklist", label: "Your Checklist" }
           : null,
         can("checklist_master", "view")
@@ -169,20 +178,31 @@ export default function Navbar() {
           : !can("checklist_master", "view") && can("assigned_checklists", "view")
           ? { to: "/checklists", label: "Tasks" }
           : null,
-        can("checklist_master", "view") ? { to: "/checklists/tasks", label: "Tasks" } : null,
-        can("poll_master", "view")
+        canAny([
+          { moduleKey: "tasks", actionKey: "view" },
+          { moduleKey: "checklist_master", actionKey: "view" },
+        ])
+          ? { to: "/checklists/tasks", label: "Tasks" }
+          : null,
+        isPollingEnabled && can("poll_master", "view")
           ? { to: "/polls", label: "Polling System" }
-          : !can("poll_master", "view") && can("assigned_polls", "view")
+          : isPollingEnabled && !can("poll_master", "view") && can("assigned_polls", "view")
           ? { to: "/polls", label: "Assigned Polls" }
           : null,
         can("own_task", "view") ? { to: "/own-tasks", label: "Own Task" } : null,
-        can("complaints", "view") ? { to: "/complaints", label: "Complaint Dashboard" } : null,
+        isModuleEnabled("complaint_dashboard") &&
+        canAny([
+          { moduleKey: "complaint_dashboard", actionKey: "view" },
+          { moduleKey: "complaints", actionKey: "view" },
+        ])
+          ? { to: "/complaints", label: "Complaint Dashboard" }
+          : null,
         can("shared_task", "view") ? { to: "/shared-tasks", label: "Shared Task" } : null,
         can("approval_inbox", "view")
           ? { to: "/checklists/approvals", label: "Approval Inbox" }
           : null,
       ].filter(Boolean),
-    [can]
+    [can, canAny, isModuleEnabled, isPollingEnabled]
   );
 
   const masterLinks = useMemo(
@@ -193,6 +213,9 @@ export default function Navbar() {
           : null,
         can("department_master", "view")
           ? { to: "/masters/departments", label: "Departments" }
+          : null,
+        can("sub_department_master", "view")
+          ? { to: "/masters/departments", label: "Sub Departments" }
           : null,
         can("designation_master", "view")
           ? { to: "/masters/designations", label: "Designations" }
@@ -267,53 +290,83 @@ export default function Navbar() {
   const reportLinks = useMemo(
     () =>
       [
+        isModuleEnabled("overview_1") &&
         canAny([
+          { moduleKey: "overview_1", actionKey: "view" },
+          { moduleKey: "overview_1", actionKey: "report_view" },
           { moduleKey: "dashboard_analytics", actionKey: "view" },
           { moduleKey: "dashboard_analytics", actionKey: "report_view" },
         ])
           ? { to: "/dashboard-1", label: "Overview 1" }
           : null,
+        isModuleEnabled("overview_2") &&
         canAny([
+          { moduleKey: "overview_2", actionKey: "view" },
+          { moduleKey: "overview_2", actionKey: "report_view" },
           { moduleKey: "dashboard_analytics", actionKey: "view" },
           { moduleKey: "dashboard_analytics", actionKey: "report_view" },
         ])
           ? { to: "/dashboard-2", label: "Overview 2" }
           : null,
+        isModuleEnabled("dashboard_summary") &&
         canAny([
+          { moduleKey: "dashboard_summary", actionKey: "view" },
+          { moduleKey: "dashboard_summary", actionKey: "report_view" },
           { moduleKey: "dashboard_analytics", actionKey: "view" },
           { moduleKey: "dashboard_analytics", actionKey: "report_view" },
         ])
           ? { to: "/dashboard-summary", label: "Summary" }
           : null,
+        isModuleEnabled("checklist_report") &&
         canAny([
+          { moduleKey: "checklist_report", actionKey: "view" },
+          { moduleKey: "checklist_report", actionKey: "report_view" },
           { moduleKey: "reports", actionKey: "view" },
           { moduleKey: "reports", actionKey: "report_view" },
         ])
           ? { to: "/reports/checklists", label: "Checklist Report" }
           : null,
-        can("poll_master", "report_view")
+        isModuleEnabled("poll_results") &&
+        canAny([
+          { moduleKey: "poll_results", actionKey: "view" },
+          { moduleKey: "poll_results", actionKey: "report_view" },
+          { moduleKey: "poll_master", actionKey: "report_view" },
+        ])
           ? { to: "/reports/polls", label: "Poll Results" }
           : null,
-        can("complaints", "view")
+        isModuleEnabled("complaint_report") &&
+        canAny([
+          { moduleKey: "complaint_report", actionKey: "view" },
+          { moduleKey: "complaint_report", actionKey: "report_view" },
+          { moduleKey: "complaints", actionKey: "view" },
+        ])
           ? { to: "/complaints/reports", label: "Complaint Report" }
           : null,
       ].filter(Boolean),
-    [can, canAny]
+    [canAny, isModuleEnabled]
   );
 
   const adminLinks = useMemo(
     () =>
       [
-        can("checklist_master", "approve") || can("checklist_master", "reject")
+        canAny([
+          { moduleKey: "admin_approvals", actionKey: "view" },
+          { moduleKey: "admin_approvals", actionKey: "approve" },
+          { moduleKey: "checklist_master", actionKey: "approve" },
+          { moduleKey: "checklist_master", actionKey: "reject" },
+        ])
           ? { to: "/checklists/admin-approvals", label: "Admin Approvals" }
           : null,
         can("user_management", "view") ? { to: "/users", label: "Users" } : null,
         can("role_permission_setup", "view")
           ? { to: "/permissions/roles", label: "Role Permission Setup" }
           : null,
+        can("module_settings", "view")
+          ? { to: "/module-settings", label: "Module Settings" }
+          : null,
         can("settings_masters", "view") ? { to: "/settings", label: "Settings" } : null,
       ].filter(Boolean),
-    [can]
+    [can, canAny]
   );
 
   useEffect(() => {
@@ -321,6 +374,32 @@ export default function Navbar() {
     setActiveNavMenu("");
     setNotificationsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!activeNavMenu) return undefined;
+
+    const handleOutsideClick = (event) => {
+      if (navbarRef.current?.contains(event.target)) {
+        return;
+      }
+
+      setActiveNavMenu("");
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setActiveNavMenu("");
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [activeNavMenu]);
 
   useEffect(() => {
     if (!isEmployee && !isAdmin && !hasRestrictedChecklistAccess && !canViewComplaintNotifications) {
@@ -516,7 +595,9 @@ export default function Navbar() {
     canViewComplaintNotifications,
     hasRestrictedChecklistAccess,
     isAdmin,
+    isComplaintsEnabled,
     isEmployee,
+    isPollingEnabled,
   ]);
 
   useEffect(() => {
@@ -661,6 +742,7 @@ export default function Navbar() {
   const isAdminMenuActive = matchesPath([
     "/users",
     "/permissions",
+    "/module-settings",
     "/settings",
     "/checklists/admin-approvals",
   ]);
@@ -670,7 +752,7 @@ export default function Navbar() {
     if (!links.length) return null;
 
     return (
-      <li className="nav-item dropdown" key={menuKey}>
+      <li className={`nav-item dropdown ${isNavMenuOpen(menuKey) ? "show" : ""}`} key={menuKey}>
         <button
           type="button"
           className={`nav-link dropdown-toggle border-0 bg-transparent ${
@@ -678,14 +760,22 @@ export default function Navbar() {
           }`}
           onClick={() => toggleNavMenu(menuKey)}
           aria-expanded={isNavMenuOpen(menuKey)}
+          aria-haspopup="true"
         >
           {label}
         </button>
 
         <ul className={`dropdown-menu ${isNavMenuOpen(menuKey) ? "show" : ""}`}>
           {links.map((link) => (
-            <li key={link.to}>
-              <NavLink className={buildDropdownItemClass} to={link.to}>
+            <li key={`${link.to}:${link.label}`}>
+              <NavLink
+                className={buildDropdownItemClass}
+                to={link.to}
+                onClick={() => {
+                  setActiveNavMenu("");
+                  setMenuOpen(false);
+                }}
+              >
                 {link.label}
               </NavLink>
             </li>
@@ -714,6 +804,8 @@ export default function Navbar() {
   };
 
   const openPollNotification = async (item) => {
+    if (!isPollingEnabled) return;
+
     setNotificationsOpen(false);
 
     try {
@@ -772,6 +864,8 @@ export default function Navbar() {
   };
 
   const openComplaintNotification = async (item) => {
+    if (!isComplaintsEnabled) return;
+
     setNotificationsOpen(false);
 
     try {
@@ -809,6 +903,8 @@ export default function Navbar() {
   };
 
   const markAllComplaintNotificationsRead = async () => {
+    if (!isComplaintsEnabled) return;
+
     try {
       await api.post("/complaints/notifications/read-all");
       setComplaintNotificationData(emptyComplaintNotificationState);
@@ -822,7 +918,7 @@ export default function Navbar() {
       await Promise.all([
         markAllFeedbackNotificationsRead(),
         markAllChecklistRequestNotificationsRead(),
-        markAllComplaintNotificationsRead(),
+        isComplaintsEnabled ? markAllComplaintNotificationsRead() : Promise.resolve(),
       ]);
       return;
     }
@@ -1108,13 +1204,15 @@ export default function Navbar() {
             >
               Open Own Tasks
             </button>
-            <button
-              type="button"
-              className="btn btn-link btn-sm text-decoration-none p-0"
-              onClick={() => navigate("/polls")}
-            >
-              Open Polls
-            </button>
+            {isPollingEnabled ? (
+              <button
+                type="button"
+                className="btn btn-link btn-sm text-decoration-none p-0"
+                onClick={() => navigate("/polls")}
+              >
+                Open Polls
+              </button>
+            ) : null}
           </div>
         ) : null}
         {isAdmin || hasRestrictedChecklistAccess || canViewComplaintNotifications ? (
@@ -1135,20 +1233,20 @@ export default function Navbar() {
             <div className="d-flex flex-column gap-3">
               {isAdmin ? (
                 <>
-                  {renderComplaintNotifications()}
+                  {isComplaintsEnabled ? renderComplaintNotifications() : null}
                   {renderChecklistRequestNotifications()}
                   {renderFeedbackNotifications()}
                 </>
               ) : hasRestrictedChecklistAccess ? (
                 <>
-                  {renderComplaintNotifications()}
+                  {isComplaintsEnabled ? renderComplaintNotifications() : null}
                   {renderChecklistRequestNotifications()}
                 </>
               ) : (
                 <>
-                  {renderComplaintNotifications()}
+                  {isComplaintsEnabled ? renderComplaintNotifications() : null}
                   {renderChatMentions()}
-                  {renderPollNotifications()}
+                  {isPollingEnabled ? renderPollNotifications() : null}
                   {renderReminderGroup("Due Now", reminderNotificationData.due)}
                   {renderReminderGroup("Upcoming", reminderNotificationData.upcoming)}
                 </>
@@ -1189,6 +1287,7 @@ export default function Navbar() {
 
   return (
     <nav
+      ref={navbarRef}
       className="navbar navbar-expand-lg navbar-dark px-3 px-lg-4 app-navbar"
       data-testid="app-navbar"
     >
@@ -1208,7 +1307,10 @@ export default function Navbar() {
           <button
             className="navbar-toggler app-navbar__mobile-toggle"
             type="button"
-            onClick={() => setMenuOpen((prev) => !prev)}
+            onClick={() => {
+              setMenuOpen((prev) => !prev);
+              setActiveNavMenu("");
+            }}
             aria-label="Toggle navigation"
           >
             <span className="navbar-toggler-icon" />

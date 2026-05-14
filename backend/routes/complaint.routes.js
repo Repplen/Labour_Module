@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const { auth } = require("../middleware/auth");
+const { moduleEnabled } = require("../middleware/moduleEnabled");
 const { requirePermission } = require("../middleware/permissions");
 const complaintUpload = require("../middleware/complaintUpload");
 const { validateRequest } = require("../middleware/validateRequest");
@@ -22,6 +23,8 @@ const {
   markComplaintNotificationRead,
   progressComplaint,
 } = require("../controllers/complaint.controller");
+
+router.use(moduleEnabled("complaints"));
 
 router.get("/options", auth, requirePermission("complaints", "view"), getComplaintOptions);
 router.get("/dashboard", auth, requirePermission("complaints", "view"), getComplaintDashboard);

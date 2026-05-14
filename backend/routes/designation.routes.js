@@ -2,8 +2,13 @@ const router = require("express").Router();
 const Designation = require("../models/Designation");
 const { auth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/permissions");
+const {
+  normalizeMasterName,
+  sendMasterNameValidationError,
+  validateMasterName,
+} = require("../utils/masterNameValidation");
 
-const normalizeName = (value) => String(value || "").trim();
+const normalizeName = normalizeMasterName;
 const duplicateDesignationMessage = "Duplicate designation data found";
 const duplicateDesignationNameError = {
   field: "name",
@@ -42,8 +47,8 @@ router.get("/", auth, requirePermission("designation_master", "view"), async (re
 
 router.post("/", auth, requirePermission("designation_master", "add"), async (req, res) => {
   try {
-    const name = normalizeName(req.body.name);
-    if (!name) return res.status(400).json({ message: "Designation name is required" });
+    const { name, error: nameError } = validateMasterName(req.body.name, "Designation");
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
 
     const duplicateDesignation = await findDuplicateDesignation(name);
     if (duplicateDesignation) return sendDuplicateDesignationResponse(res);
@@ -60,8 +65,8 @@ router.post("/", auth, requirePermission("designation_master", "add"), async (re
 
 router.put("/:id", auth, requirePermission("designation_master", "edit"), async (req, res) => {
   try {
-    const name = normalizeName(req.body.name);
-    if (!name) return res.status(400).json({ message: "Designation name is required" });
+    const { name, error: nameError } = validateMasterName(req.body.name, "Designation");
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
 
     const duplicateDesignation = await findDuplicateDesignation(name, req.params.id);
     if (duplicateDesignation) return sendDuplicateDesignationResponse(res);

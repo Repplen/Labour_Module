@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const controller = require("../controllers/attendance.controller");
 const { auth } = require("../middleware/auth");
+const { moduleEnabled } = require("../middleware/moduleEnabled");
 const { requireAnyPermission, requirePermission } = require("../middleware/permissions");
 const { validateRequest } = require("../middleware/validateRequest");
 const {
@@ -12,6 +13,8 @@ const {
   regularizationCreateSchema,
   regularizationDecisionSchema,
 } = require("../validators/attendance.validator");
+
+router.use(moduleEnabled("attendance"));
 
 router.get(
   "/options",

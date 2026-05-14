@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const { auth } = require("../middleware/auth");
+const { moduleEnabled } = require("../middleware/moduleEnabled");
 const pollUpload = require("../middleware/pollUpload");
 const { requireAnyPermission, requirePermission } = require("../middleware/permissions");
 const { validateRequest } = require("../middleware/validateRequest");
@@ -26,6 +27,8 @@ const {
   togglePollStatus,
   updatePoll,
 } = require("../controllers/poll.controller");
+
+router.use(moduleEnabled("polling"));
 
 router.get(
   "/options",

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
+import { getApiUserFieldErrors, validateUserFields } from "../utils/userFieldValidation";
 
 const defaultCreateForm = {
   name: "",
@@ -93,6 +94,10 @@ export default function UsersAdmin() {
   const [success, setSuccess] = useState("");
   const [viewUser, setViewUser] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [createTouched, setCreateTouched] = useState({});
+  const [editTouched, setEditTouched] = useState({});
+  const [createServerErrors, setCreateServerErrors] = useState({});
+  const [editServerErrors, setEditServerErrors] = useState({});
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const isDefaultAdmin =
@@ -106,6 +111,40 @@ export default function UsersAdmin() {
       ),
     [sites]
   );
+  const createClientErrors = useMemo(
+    () => validateUserFields(createForm, { requirePassword: true }),
+    [createForm]
+  );
+  const editClientErrors = useMemo(() => validateUserFields(editForm), [editForm]);
+  const createFieldErrors = useMemo(
+    () => ({
+      name: createClientErrors.name || createServerErrors.name || "",
+      email: createClientErrors.email || createServerErrors.email || "",
+      password: createClientErrors.password || createServerErrors.password || "",
+      siteId: createServerErrors.siteId || "",
+    }),
+    [createClientErrors, createServerErrors]
+  );
+  const editFieldErrors = useMemo(
+    () => ({
+      name: editClientErrors.name || editServerErrors.name || "",
+      email: editClientErrors.email || editServerErrors.email || "",
+      password: editClientErrors.password || editServerErrors.password || "",
+      siteId: editServerErrors.siteId || "",
+    }),
+    [editClientErrors, editServerErrors]
+  );
+  const shouldShowCreateError = (field) => Boolean(createTouched[field] && createFieldErrors[field]);
+  const shouldShowEditError = (field) => Boolean(editTouched[field] && editFieldErrors[field]);
+  const isCreateDisabled =
+    saving ||
+    !siteOptions.length ||
+    !createForm.siteId ||
+    Object.values(createFieldErrors).some(Boolean);
+  const isEditDisabled =
+    updating ||
+    (editForm.role !== "admin" && !editForm.siteId) ||
+    Object.values(editFieldErrors).some(Boolean);
 
   const loadPage = async () => {
     setLoading(true);
@@ -134,16 +173,32 @@ export default function UsersAdmin() {
 
   const resetCreateForm = () => {
     setCreateForm(defaultCreateForm);
+    setCreateTouched({});
+    setCreateServerErrors({});
   };
 
   const handleCreateChange = (event) => {
     const { name, value } = event.target;
     setCreateForm((prev) => ({ ...prev, [name]: value }));
+    setCreateTouched((prev) => ({ ...prev, [name]: true }));
+    setCreateServerErrors((prev) => {
+      if (!prev[name]) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[name];
+      return nextErrors;
+    });
   };
 
   const handleEditChange = (event) => {
     const { name, value } = event.target;
     setEditForm((prev) => ({ ...prev, [name]: value }));
+    setEditTouched((prev) => ({ ...prev, [name]: true }));
+    setEditServerErrors((prev) => {
+      if (!prev[name]) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[name];
+      return nextErrors;
+    });
   };
 
   const openViewModal = (user) => {
@@ -158,6 +213,8 @@ export default function UsersAdmin() {
     const userSite = getUserSite(user);
 
     setEditingUser(user);
+    setEditTouched({});
+    setEditServerErrors({});
     setEditForm({
       id: String(user?._id || ""),
       name: user?.name || "",
@@ -171,6 +228,8 @@ export default function UsersAdmin() {
   const closeEditModal = () => {
     setEditingUser(null);
     setEditForm(defaultEditForm);
+    setEditTouched({});
+    setEditServerErrors({});
   };
 
   const handleDelete = async (user) => {
@@ -202,10 +261,11 @@ export default function UsersAdmin() {
     setSaving(true);
     setError("");
     setSuccess("");
+    setCreateTouched({ name: true, email: true, password: true, siteId: true });
 
     try {
-      if (!createForm.password) {
-        throw new Error("Password is required");
+      if (Object.values(createClientErrors).some(Boolean)) {
+        return;
       }
 
       if (!createForm.siteId) {
@@ -224,6 +284,11 @@ export default function UsersAdmin() {
       resetCreateForm();
       await loadPage();
     } catch (err) {
+      const fieldErrors = getApiUserFieldErrors(err);
+      if (Object.values(fieldErrors).some(Boolean)) {
+        setCreateServerErrors(fieldErrors);
+        return;
+      }
       setError(
         err.response?.data?.message ||
           err.message ||
@@ -239,10 +304,11 @@ export default function UsersAdmin() {
     setUpdating(true);
     setError("");
     setSuccess("");
+    setEditTouched({ name: true, email: true, password: true, siteId: true });
 
     try {
-      if (!editForm.name.trim() || !editForm.email.trim()) {
-        throw new Error("Name and email are required");
+      if (Object.values(editClientErrors).some(Boolean)) {
+        return;
       }
 
       if (editForm.role !== "admin" && !editForm.siteId) {
@@ -275,6 +341,11 @@ export default function UsersAdmin() {
       closeEditModal();
       await loadPage();
     } catch (err) {
+      const fieldErrors = getApiUserFieldErrors(err);
+      if (Object.values(fieldErrors).some(Boolean)) {
+        setEditServerErrors(fieldErrors);
+        return;
+      }
       setError(err.response?.data?.message || err.message || "Failed to update user");
     } finally {
       setUpdating(false);
@@ -295,13 +366,19 @@ export default function UsersAdmin() {
           <form className="row g-2" onSubmit={handleCreateSubmit}>
             <div className="col-md-3">
               <input
-                className="form-control"
+                className={`form-control${shouldShowCreateError("name") ? " is-invalid" : ""}`}
                 name="name"
                 placeholder="Name"
                 value={createForm.name}
                 onChange={handleCreateChange}
-                required
+                aria-invalid={shouldShowCreateError("name") ? "true" : "false"}
+                aria-describedby={shouldShowCreateError("name") ? "create-user-name-error" : undefined}
               />
+              {shouldShowCreateError("name") ? (
+                <div className="invalid-feedback d-block" id="create-user-name-error">
+                  {createFieldErrors.name}
+                </div>
+              ) : null}
             </div>
 
             <div className="col-md-3">
@@ -325,27 +402,40 @@ export default function UsersAdmin() {
 
             <div className="col-md-2">
               <input
-                type="email"
-                className="form-control"
+                type="text"
+                className={`form-control${shouldShowCreateError("email") ? " is-invalid" : ""}`}
                 name="email"
                 placeholder="Email"
                 value={createForm.email}
                 onChange={handleCreateChange}
-                required
+                aria-invalid={shouldShowCreateError("email") ? "true" : "false"}
+                aria-describedby={shouldShowCreateError("email") ? "create-user-email-error" : undefined}
               />
+              {shouldShowCreateError("email") ? (
+                <div className="invalid-feedback d-block" id="create-user-email-error">
+                  {createFieldErrors.email}
+                </div>
+              ) : null}
             </div>
 
             <div className="col-md-2">
               <input
                 type="password"
-                className="form-control"
+                className={`form-control${shouldShowCreateError("password") ? " is-invalid" : ""}`}
                 name="password"
                 placeholder="Password"
                 value={createForm.password}
                 onChange={handleCreateChange}
                 required
                 minLength={6}
+                aria-invalid={shouldShowCreateError("password") ? "true" : "false"}
+                aria-describedby={shouldShowCreateError("password") ? "create-user-password-error" : undefined}
               />
+              {shouldShowCreateError("password") ? (
+                <div className="invalid-feedback d-block" id="create-user-password-error">
+                  {createFieldErrors.password}
+                </div>
+              ) : null}
             </div>
 
             <div className="col-md-2">
@@ -361,7 +451,7 @@ export default function UsersAdmin() {
             <div className="col-12 d-flex justify-content-end">
               <button
                 className="btn btn-primary px-4"
-                disabled={saving || !siteOptions.length}
+                disabled={isCreateDisabled}
                 data-testid="add-user-button"
               >
                 {saving ? "Saving..." : "Create User"}
@@ -533,24 +623,36 @@ export default function UsersAdmin() {
                 <div className="col-md-6">
                   <label className="form-label fw-semibold">Name</label>
                   <input
-                    className="form-control"
+                    className={`form-control${shouldShowEditError("name") ? " is-invalid" : ""}`}
                     name="name"
                     value={editForm.name}
                     onChange={handleEditChange}
-                    required
+                    aria-invalid={shouldShowEditError("name") ? "true" : "false"}
+                    aria-describedby={shouldShowEditError("name") ? "edit-user-name-error" : undefined}
                   />
+                  {shouldShowEditError("name") ? (
+                    <div className="invalid-feedback d-block" id="edit-user-name-error">
+                      {editFieldErrors.name}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="col-md-6">
                   <label className="form-label fw-semibold">Email</label>
                   <input
-                    type="email"
-                    className="form-control"
+                    type="text"
+                    className={`form-control${shouldShowEditError("email") ? " is-invalid" : ""}`}
                     name="email"
                     value={editForm.email}
                     onChange={handleEditChange}
-                    required
+                    aria-invalid={shouldShowEditError("email") ? "true" : "false"}
+                    aria-describedby={shouldShowEditError("email") ? "edit-user-email-error" : undefined}
                   />
+                  {shouldShowEditError("email") ? (
+                    <div className="invalid-feedback d-block" id="edit-user-email-error">
+                      {editFieldErrors.email}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="col-md-6">
@@ -596,13 +698,20 @@ export default function UsersAdmin() {
                   <label className="form-label fw-semibold">New Password</label>
                   <input
                     type="password"
-                    className="form-control"
+                    className={`form-control${shouldShowEditError("password") ? " is-invalid" : ""}`}
                     name="password"
                     value={editForm.password}
                     onChange={handleEditChange}
                     placeholder="Leave blank to keep current password"
                     minLength={6}
+                    aria-invalid={shouldShowEditError("password") ? "true" : "false"}
+                    aria-describedby={shouldShowEditError("password") ? "edit-user-password-error" : undefined}
                   />
+                  {shouldShowEditError("password") ? (
+                    <div className="invalid-feedback d-block" id="edit-user-password-error">
+                      {editFieldErrors.password}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -610,7 +719,7 @@ export default function UsersAdmin() {
               <button type="button" className="btn btn-outline-secondary" onClick={closeEditModal}>
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={updating}>
+              <button type="submit" className="btn btn-primary" disabled={isEditDisabled}>
                 {updating ? "Updating..." : "Save Changes"}
               </button>
             </div>

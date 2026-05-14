@@ -4,9 +4,14 @@ const Employee = require("../models/Employee");
 const { auth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/permissions");
 const { buildDepartmentScopeFilter } = require("../services/accessScope.service");
+const {
+  normalizeMasterName,
+  sendMasterNameValidationError,
+  validateMasterName,
+} = require("../utils/masterNameValidation");
 
 const MAX_SUB_LEVELS = 4;
-const normalizeName = (value) => String(value || "").trim();
+const normalizeName = normalizeMasterName;
 const duplicateDepartmentMessage = "Duplicate department data found";
 const duplicateDepartmentNameError = {
   field: "name",
@@ -174,7 +179,7 @@ router.get("/", auth, requirePermission("department_master", "view"), async (req
 
 router.post("/", auth, requirePermission("department_master", "add"), async (req, res) => {
   try {
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateMasterName(req.body.name, "Department");
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
@@ -185,7 +190,7 @@ router.post("/", auth, requirePermission("department_master", "add"), async (req
         fallbackHeadNames: req.body.departmentLeadNames,
         invalidSelectionMessage: "One or more selected department leads are invalid",
       });
-    if (!name) return res.status(400).json({ message: "Department name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (headError) return res.status(400).json({ message: headError });
     if (departmentLeadError) {
       return res.status(400).json({ message: departmentLeadError });
@@ -210,7 +215,7 @@ router.put("/:id", auth, requirePermission("department_master", "edit"), async (
       return res.status(404).json({ message: "Department not found" });
     }
 
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateMasterName(req.body.name, "Department");
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
@@ -221,7 +226,7 @@ router.put("/:id", auth, requirePermission("department_master", "edit"), async (
         fallbackHeadNames: req.body.departmentLeadNames,
         invalidSelectionMessage: "One or more selected department leads are invalid",
       });
-    if (!name) return res.status(400).json({ message: "Department name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (headError) return res.status(400).json({ message: headError });
     if (departmentLeadError) {
       return res.status(400).json({ message: departmentLeadError });
@@ -294,14 +299,26 @@ router.post("/:id/sub-departments", auth, requirePermission("sub_department_mast
       return res.status(404).json({ message: "Department not found" });
     }
 
-    const { names, hasBulkPayload } = parseSubDepartmentNames(req.body);
+    const { names: rawNames, hasBulkPayload } = parseSubDepartmentNames(req.body);
+    if (!rawNames.length) {
+      return sendMasterNameValidationError(
+        res,
+        "name",
+        "Sub department name is required."
+      );
+    }
+
+    const validationResults = rawNames.map((item) =>
+      validateMasterName(item, "Sub department")
+    );
+    const invalidName = validationResults
+      .find((result) => result.error);
+    const names = validationResults.map((result) => result.name);
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
     });
-    if (!names.length) {
-      return res.status(400).json({ message: "Sub department name is required" });
-    }
+    if (invalidName) return sendMasterNameValidationError(res, "name", invalidName.error);
     if (headError) return res.status(400).json({ message: headError });
 
     const row = await Department.findById(req.params.id);
@@ -358,12 +375,12 @@ router.put("/:id/sub-departments/:subId", auth, requirePermission("sub_departmen
       return res.status(404).json({ message: "Department not found" });
     }
 
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateMasterName(req.body.name, "Sub department");
     const { headNames, error: headError } = await resolveHeadNames({
       headEmployeeIds: req.body.headEmployeeIds,
       fallbackHeadNames: req.body.headNames,
     });
-    if (!name) return res.status(400).json({ message: "Sub department name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (headError) return res.status(400).json({ message: headError });
 
     const row = await Department.findById(req.params.id);

@@ -5,8 +5,13 @@ const Employee = require("../models/Employee");
 const { auth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/permissions");
 const { buildCompanyScopeFilter } = require("../services/accessScope.service");
+const {
+  normalizeMasterName,
+  sendMasterNameValidationError,
+  validateCompanyName,
+} = require("../utils/masterNameValidation");
 
-const normalizeName = (value) => String(value || "").trim();
+const normalizeName = normalizeMasterName;
 const duplicateCompanyMessage = "Duplicate company data found";
 const duplicateCompanyNameError = {
   field: "name",
@@ -127,12 +132,12 @@ router.get("/", auth, requirePermission("company_master", "view"), async (req, r
 
 router.post("/", auth, requirePermission("company_master", "add"), async (req, res) => {
   try {
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateCompanyName(req.body.name);
     const { directorNames, error: directorError } = await resolveDirectorNames({
       directorEmployeeIds: req.body.directorEmployeeIds,
       fallbackDirectorNames: req.body.directorNames,
     });
-    if (!name) return res.status(400).json({ message: "Company name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (directorError) return res.status(400).json({ message: directorError });
 
     const duplicateCompany = await findDuplicateCompany(name);
@@ -150,12 +155,12 @@ router.post("/", auth, requirePermission("company_master", "add"), async (req, r
 
 router.put("/:id", auth, requirePermission("company_master", "edit"), async (req, res) => {
   try {
-    const name = normalizeName(req.body.name);
+    const { name, error: nameError } = validateCompanyName(req.body.name);
     const { directorNames, error: directorError } = await resolveDirectorNames({
       directorEmployeeIds: req.body.directorEmployeeIds,
       fallbackDirectorNames: req.body.directorNames,
     });
-    if (!name) return res.status(400).json({ message: "Company name is required" });
+    if (nameError) return sendMasterNameValidationError(res, "name", nameError);
     if (directorError) return res.status(400).json({ message: directorError });
 
     const existing = await Company.findOne({

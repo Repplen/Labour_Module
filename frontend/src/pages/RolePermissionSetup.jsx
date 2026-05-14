@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axios";
+import { useModuleSettings } from "../context/useModuleSettings";
 import { usePermissions } from "../context/usePermissions";
 
 const actionFieldMap = {
@@ -42,11 +43,12 @@ const rowArrayToMap = (rows = []) =>
     return result;
   }, {});
 
-const buildMatrixRows = (modules = [], rowMap = {}) =>
+const buildMatrixRows = (modules = [], rowMap = {}, isPermissionModuleEnabled = () => true) =>
   (Array.isArray(modules) ? modules : []).map((moduleItem, index) => ({
     srNo: index + 1,
     moduleKey: moduleItem.key,
     moduleName: moduleItem.name,
+    moduleEnabled: isPermissionModuleEnabled(moduleItem.key),
     ...Object.values(actionFieldMap).reduce((result, fieldKey) => {
       result[fieldKey] = Boolean(rowMap[moduleItem.key]?.[fieldKey]);
       return result;
@@ -55,7 +57,7 @@ const buildMatrixRows = (modules = [], rowMap = {}) =>
 
 const updateMatrixRows = (rows = [], moduleKey, fieldKey, checked) =>
   rows.map((row) =>
-    row.moduleKey === moduleKey
+    row.moduleKey === moduleKey && row.moduleEnabled !== false
       ? {
           ...row,
           [fieldKey]: checked,
@@ -73,20 +75,29 @@ const buildActionPatch = (fieldKeys = [], checked) =>
   }, {});
 
 const updateAllMatrixRows = (rows = [], fieldKeys = [], checked) =>
-  rows.map((row) => ({
-    ...row,
-    ...buildActionPatch(fieldKeys, checked),
-  }));
+  rows.map((row) =>
+    row.moduleEnabled === false
+      ? row
+      : {
+          ...row,
+          ...buildActionPatch(fieldKeys, checked),
+        }
+  );
 
 const updateMatrixColumnRows = (rows = [], fieldKey, checked) =>
-  rows.map((row) => ({
-    ...row,
-    [fieldKey]: checked,
-  }));
+  rows.map((row) =>
+    row.moduleEnabled === false
+      ? row
+      : {
+          ...row,
+          [fieldKey]: checked,
+        }
+  );
 
 const getMatrixSelectionState = (rows = [], fieldKeys = []) => {
-  const totalCount = rows.length * fieldKeys.length;
-  const selectedCount = rows.reduce(
+  const enabledRows = rows.filter((row) => row.moduleEnabled !== false);
+  const totalCount = enabledRows.length * fieldKeys.length;
+  const selectedCount = enabledRows.reduce(
     (count, row) => count + fieldKeys.filter((fieldKey) => Boolean(row[fieldKey])).length,
     0
   );
@@ -98,11 +109,12 @@ const getMatrixSelectionState = (rows = [], fieldKeys = []) => {
 };
 
 const getMatrixColumnSelectionState = (rows = [], fieldKey) => {
-  const selectedCount = rows.filter((row) => Boolean(row[fieldKey])).length;
+  const enabledRows = rows.filter((row) => row.moduleEnabled !== false);
+  const selectedCount = enabledRows.filter((row) => Boolean(row[fieldKey])).length;
 
   return {
-    all: rows.length > 0 && selectedCount === rows.length,
-    some: selectedCount > 0 && selectedCount < rows.length,
+    all: enabledRows.length > 0 && selectedCount === enabledRows.length,
+    some: selectedCount > 0 && selectedCount < enabledRows.length,
   };
 };
 
@@ -305,15 +317,21 @@ function PermissionMatrixTable({ actions, rows, onToggle, onToggleAction, onTogg
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.moduleKey}>
+              <tr key={row.moduleKey} className={row.moduleEnabled === false ? "table-light" : ""}>
                 <td>{row.srNo}</td>
-                <td>{row.moduleName}</td>
+                <td>
+                  <span>{row.moduleName}</span>
+                  {row.moduleEnabled === false ? (
+                    <span className="badge text-bg-secondary ms-2">Disabled</span>
+                  ) : null}
+                </td>
                 {actions.map((action) => (
                   <td key={action.key} className="text-center">
                     <input
                       type="checkbox"
                       className="form-check-input"
                       checked={Boolean(row[actionFieldMap[action.key]])}
+                      disabled={row.moduleEnabled === false}
                       onChange={(event) =>
                         onToggle(row.moduleKey, actionFieldMap[action.key], event.target.checked)
                       }
@@ -331,6 +349,7 @@ function PermissionMatrixTable({ actions, rows, onToggle, onToggleAction, onTogg
 
 export default function RolePermissionSetup() {
   const { refresh } = usePermissions();
+  const { isPermissionModuleEnabled } = useModuleSettings();
   const [loading, setLoading] = useState(true);
   const [savingRoleMatrix, setSavingRoleMatrix] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
@@ -428,8 +447,8 @@ export default function RolePermissionSetup() {
   }, [rolePermissions, selectedRoleId]);
 
   useEffect(() => {
-    setRoleMatrixRows(buildMatrixRows(modules, rolePermissionMap));
-  }, [modules, rolePermissionMap]);
+    setRoleMatrixRows(buildMatrixRows(modules, rolePermissionMap, isPermissionModuleEnabled));
+  }, [isPermissionModuleEnabled, modules, rolePermissionMap]);
 
   const selectedPrincipal = useMemo(() => {
     const [principalType = "", principalId = ""] = String(selectedPrincipalKey || "").split(":");
@@ -506,7 +525,7 @@ export default function RolePermissionSetup() {
       return result;
     }, {});
 
-    setOverrideRows(buildMatrixRows(modules, mergedMap));
+    setOverrideRows(buildMatrixRows(modules, mergedMap, isPermissionModuleEnabled));
     setAccessForm({
       roleId: selectedPrincipal.roleId || "",
       accessScopeStrategy: selectedPrincipal.accessScopeStrategy || "inherit",
@@ -516,7 +535,13 @@ export default function RolePermissionSetup() {
       accessSubDepartmentIds: selectedPrincipal.accessSubDepartmentIds || [],
       accessEmployeeIds: selectedPrincipal.accessEmployeeIds || [],
     });
-  }, [modules, selectedPrincipal, selectedPrincipalOverrideMap, selectedPrincipalRolePermissionMap]);
+  }, [
+    isPermissionModuleEnabled,
+    modules,
+    selectedPrincipal,
+    selectedPrincipalOverrideMap,
+    selectedPrincipalRolePermissionMap,
+  ]);
 
   const updateAccessSelections = (fieldKey, values) => {
     setAccessForm((currentValue) => {

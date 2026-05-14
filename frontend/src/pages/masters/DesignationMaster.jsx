@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
+import { getApiFieldError, validateMasterName } from "../../utils/masterNameValidation";
 
 const duplicateDesignationMessage = "This designation name already exists.";
 
@@ -13,7 +14,7 @@ const getApiNameDuplicateError = (error) => {
     (row) => String(row?.field || row?.path || "").trim() === "name"
   );
 
-  if (hasNameError || error?.response?.status === 409) {
+  if (error?.response?.status === 409 && hasNameError) {
     return duplicateDesignationMessage;
   }
 
@@ -41,8 +42,10 @@ export default function DesignationMaster() {
     }
   };
   const clientNameError = useMemo(() => {
+    const validationMessage = validateMasterName(name, "Designation");
+    if (validationMessage) return validationMessage;
+
     const nextName = normalizeMasterName(name);
-    if (!nextName) return "";
 
     const hasDuplicate = list.some(
       (designation) =>
@@ -53,7 +56,7 @@ export default function DesignationMaster() {
     return hasDuplicate ? duplicateDesignationMessage : "";
   }, [editingId, list, name]);
   const nameError = clientNameError || serverNameError;
-  const hasDuplicateError = Boolean(nameError);
+  const hasNameError = Boolean(nameError);
 
   const resetForm = () => {
     setName("");
@@ -63,8 +66,7 @@ export default function DesignationMaster() {
 
   const saveData = async () => {
     const trimmedName = name.trim();
-    if (!trimmedName) return alert("Enter designation");
-    if (hasDuplicateError) return;
+    if (!trimmedName || hasNameError) return;
 
     setLoading(true);
     setServerNameError("");
@@ -81,6 +83,11 @@ export default function DesignationMaster() {
       const duplicateError = getApiNameDuplicateError(err);
       if (duplicateError) {
         setServerNameError(duplicateError);
+        return;
+      }
+      const fieldError = getApiFieldError(err);
+      if (fieldError) {
+        setServerNameError(fieldError);
         return;
       }
 
@@ -148,7 +155,7 @@ export default function DesignationMaster() {
           <button
             className="btn btn-success"
             onClick={saveData}
-            disabled={loading || hasDuplicateError}
+            disabled={loading || hasNameError}
           >
             {loading ? "Saving..." : editingId ? "Update" : "Save"}
           </button>

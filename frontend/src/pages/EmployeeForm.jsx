@@ -8,9 +8,11 @@ import {
   validateFile,
 } from "../utils/fileValidation";
 import {
+  getApiEmployeeFieldErrors,
   getApiDuplicateEmployeeErrors,
   getEmployeeDuplicateErrors,
 } from "../utils/employeeDuplicateValidation";
+import { validateEmployeeFields } from "../utils/employeeFieldValidation";
 import { formatApiErrorMessage } from "../utils/apiErrors";
 import { formatSiteLabel } from "../utils/siteDisplay";
 
@@ -98,6 +100,7 @@ export default function EmployeeForm() {
   const [subDepartments, setSubDepartments] = useState([]);
   const [subSiteOptions, setSubSiteOptions] = useState([]);
   const [serverDuplicateErrors, setServerDuplicateErrors] = useState({});
+  const [serverFieldErrors, setServerFieldErrors] = useState({});
 
   const [form, setForm] = useState({
     employeeCode: "",
@@ -154,14 +157,15 @@ export default function EmployeeForm() {
       })),
     [subSiteOptions]
   );
+  const clientValidationErrors = useMemo(() => validateEmployeeFields(form), [form]);
   const clientDuplicateErrors = useMemo(
     () =>
       getEmployeeDuplicateErrors(employeeRows, {
         employeeCode: form.employeeCode,
         email: form.email,
         mobile: form.mobile,
-      }),
-    [employeeRows, form.employeeCode, form.email, form.mobile]
+      }, null, { skipFields: clientValidationErrors }),
+    [clientValidationErrors, employeeRows, form.employeeCode, form.email, form.mobile]
   );
   const duplicateErrors = useMemo(
     () => ({
@@ -175,6 +179,40 @@ export default function EmployeeForm() {
   const hasDuplicateErrors = Boolean(
     duplicateErrors.employeeCode || duplicateErrors.email || duplicateErrors.mobile
   );
+  const fieldErrors = useMemo(
+    () => ({
+      employeeCode:
+        clientValidationErrors.employeeCode ||
+        duplicateErrors.employeeCode ||
+        serverFieldErrors.employeeCode ||
+        "",
+      employeeName:
+        clientValidationErrors.employeeName || serverFieldErrors.employeeName || "",
+      email:
+        clientValidationErrors.email ||
+        duplicateErrors.email ||
+        serverFieldErrors.email ||
+        "",
+      mobile:
+        clientValidationErrors.mobile ||
+        duplicateErrors.mobile ||
+        serverFieldErrors.mobile ||
+        "",
+    }),
+    [clientValidationErrors, duplicateErrors, serverFieldErrors]
+  );
+  const hasFieldErrors = Boolean(
+    fieldErrors.employeeCode ||
+      fieldErrors.employeeName ||
+      fieldErrors.email ||
+      fieldErrors.mobile
+  );
+  const isSaveDisabled =
+    loading ||
+    hasFieldErrors ||
+    !form.employeeCode.trim() ||
+    !form.employeeName.trim() ||
+    !form.password.trim();
 
   const loadMasters = async () => {
     try {
@@ -199,6 +237,12 @@ export default function EmployeeForm() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setServerFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[name];
+      return nextErrors;
+    });
 
     if (name === "employeeCode" || name === "email" || name === "mobile") {
       setServerDuplicateErrors((prev) => {
@@ -276,12 +320,13 @@ export default function EmployeeForm() {
       return;
     }
 
-    if (hasDuplicateErrors) {
+    if (hasFieldErrors || hasDuplicateErrors) {
       return;
     }
 
     setLoading(true);
     setServerDuplicateErrors({});
+    setServerFieldErrors({});
 
     try {
       const data = new FormData();
@@ -313,6 +358,7 @@ export default function EmployeeForm() {
     } catch (err) {
       console.error(err);
       const apiDuplicateErrors = getApiDuplicateEmployeeErrors(err);
+      const apiFieldErrors = getApiEmployeeFieldErrors(err);
 
       if (
         apiDuplicateErrors.employeeCode ||
@@ -320,6 +366,16 @@ export default function EmployeeForm() {
         apiDuplicateErrors.mobile
       ) {
         setServerDuplicateErrors(apiDuplicateErrors);
+        return;
+      }
+
+      if (
+        apiFieldErrors.employeeCode ||
+        apiFieldErrors.employeeName ||
+        apiFieldErrors.email ||
+        apiFieldErrors.mobile
+      ) {
+        setServerFieldErrors(apiFieldErrors);
         return;
       }
 
@@ -369,59 +425,64 @@ export default function EmployeeForm() {
               <label className="form-label">Employee Code *</label>
               <input
                 className={`form-control${
-                  duplicateErrors.employeeCode ? " is-invalid" : " mb-3"
+                  fieldErrors.employeeCode ? " is-invalid" : " mb-3"
                 }`}
                 name="employeeCode"
                 placeholder="Employee Code"
                 value={form.employeeCode}
                 onChange={handleChange}
-                aria-invalid={duplicateErrors.employeeCode ? "true" : "false"}
+                aria-invalid={fieldErrors.employeeCode ? "true" : "false"}
                 aria-describedby={
-                  duplicateErrors.employeeCode
-                    ? "employee-code-duplicate-error"
+                  fieldErrors.employeeCode
+                    ? "employee-code-error"
                     : undefined
                 }
-                required
               />
-              {duplicateErrors.employeeCode ? (
+              {fieldErrors.employeeCode ? (
                 <div
                   className="invalid-feedback d-block mb-3"
-                  id="employee-code-duplicate-error"
+                  id="employee-code-error"
                 >
-                  {duplicateErrors.employeeCode}
+                  {fieldErrors.employeeCode}
                 </div>
               ) : null}
 
               <label className="form-label">Employee Name *</label>
               <input
-                className="form-control mb-3"
+                className={`form-control${fieldErrors.employeeName ? " is-invalid" : " mb-3"}`}
                 name="employeeName"
                 placeholder="Employee Name"
                 value={form.employeeName}
                 onChange={handleChange}
-                required
+                aria-invalid={fieldErrors.employeeName ? "true" : "false"}
+                aria-describedby={fieldErrors.employeeName ? "employee-name-error" : undefined}
               />
+              {fieldErrors.employeeName ? (
+                <div className="invalid-feedback d-block mb-3" id="employee-name-error">
+                  {fieldErrors.employeeName}
+                </div>
+              ) : null}
 
               <div className="row g-3">
                 <div className="col-md-6">
                   <label className="form-label">Mobile</label>
                   <input
-                    className={`form-control${duplicateErrors.mobile ? " is-invalid" : ""}`}
+                    className={`form-control${fieldErrors.mobile ? " is-invalid" : ""}`}
                     name="mobile"
                     placeholder="Mobile"
                     value={form.mobile}
                     onChange={handleChange}
-                    aria-invalid={duplicateErrors.mobile ? "true" : "false"}
+                    aria-invalid={fieldErrors.mobile ? "true" : "false"}
                     aria-describedby={
-                      duplicateErrors.mobile ? "employee-mobile-duplicate-error" : undefined
+                      fieldErrors.mobile ? "employee-mobile-error" : undefined
                     }
                   />
-                  {duplicateErrors.mobile ? (
+                  {fieldErrors.mobile ? (
                     <div
                       className="invalid-feedback d-block"
-                      id="employee-mobile-duplicate-error"
+                      id="employee-mobile-error"
                     >
-                      {duplicateErrors.mobile}
+                      {fieldErrors.mobile}
                     </div>
                   ) : null}
                 </div>
@@ -441,22 +502,22 @@ export default function EmployeeForm() {
               <div className="mb-3">
                 <label className="form-label mt-3">Email</label>
                 <input
-                  className={`form-control${duplicateErrors.email ? " is-invalid" : ""}`}
+                  className={`form-control${fieldErrors.email ? " is-invalid" : ""}`}
                   name="email"
                   placeholder="Email"
                   value={form.email}
                   onChange={handleChange}
-                  aria-invalid={duplicateErrors.email ? "true" : "false"}
+                  aria-invalid={fieldErrors.email ? "true" : "false"}
                   aria-describedby={
-                    duplicateErrors.email ? "employee-email-duplicate-error" : undefined
+                    fieldErrors.email ? "employee-email-error" : undefined
                   }
                 />
-                {duplicateErrors.email ? (
+                {fieldErrors.email ? (
                   <div
                     className="invalid-feedback d-block"
-                    id="employee-email-duplicate-error"
+                    id="employee-email-error"
                   >
-                    {duplicateErrors.email}
+                    {fieldErrors.email}
                   </div>
                 ) : null}
               </div>
@@ -628,7 +689,7 @@ export default function EmployeeForm() {
             <button
               type="submit"
               className="btn btn-success"
-              disabled={loading || hasDuplicateErrors}
+              disabled={isSaveDisabled}
             >
               {loading ? "Saving..." : "Save Employee"}
             </button>

@@ -4,6 +4,7 @@ const { env, validateEnv } = require("./config/env");
 const { startComplaintScheduler } = require("./services/complaintLifecycle.service");
 const { startChecklistScheduler } = require("./services/checklistWorkflow.service");
 const { startPersonalTaskScheduler } = require("./services/personalTask.service");
+const { syncModuleSettingsSeed } = require("./services/moduleSettings.service");
 const { syncPermissionSeed } = require("./services/permissionCatalog.service");
 
 const app = createApp();
@@ -15,6 +16,8 @@ const startServer = async () => {
     console.log("[startup] MongoDB connected");
     await syncPermissionSeed();
     console.log("[startup] Permission catalog synchronized");
+    await syncModuleSettingsSeed();
+    console.log("[startup] Module settings synchronized");
 
     startChecklistScheduler();
     startPersonalTaskScheduler();

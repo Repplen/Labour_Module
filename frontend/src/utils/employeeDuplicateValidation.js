@@ -19,14 +19,16 @@ const isSameEmployee = (employee, currentEmployeeId) =>
 export const getEmployeeDuplicateErrors = (
   employees = [],
   employeeData = {},
-  currentEmployeeId = null
+  currentEmployeeId = null,
+  options = {}
 ) => {
   const employeeCode = normalizeEmployeeCode(employeeData.employeeCode);
   const email = normalizeEmployeeEmail(employeeData.email);
   const mobile = normalizeEmployeeMobile(employeeData.mobile);
+  const skipFields = options.skipFields || {};
   const duplicateErrors = {};
 
-  if (employeeCode) {
+  if (employeeCode && !skipFields.employeeCode) {
     const hasDuplicateEmployeeCode = employees.some(
       (employee) =>
         !isSameEmployee(employee, currentEmployeeId) &&
@@ -38,7 +40,7 @@ export const getEmployeeDuplicateErrors = (
     }
   }
 
-  if (email) {
+  if (email && !skipFields.email) {
     const hasDuplicateEmail = employees.some(
       (employee) =>
         !isSameEmployee(employee, currentEmployeeId) &&
@@ -50,7 +52,7 @@ export const getEmployeeDuplicateErrors = (
     }
   }
 
-  if (mobile) {
+  if (mobile && !skipFields.mobile) {
     const hasDuplicateMobile = employees.some(
       (employee) =>
         !isSameEmployee(employee, currentEmployeeId) &&
@@ -67,6 +69,13 @@ export const getEmployeeDuplicateErrors = (
 
 export const getApiDuplicateEmployeeErrors = (error) => {
   const responseData = error?.response?.data || {};
+  if (
+    error?.response?.status !== 409 &&
+    responseData.message !== "Duplicate employee data found"
+  ) {
+    return {};
+  }
+
   const errors = Array.isArray(responseData.errors) ? responseData.errors : [];
 
   return errors.reduce((result, row) => {
@@ -75,7 +84,31 @@ export const getApiDuplicateEmployeeErrors = (error) => {
     if (field === "employeeCode" || field === "email" || field === "mobile") {
       return {
         ...result,
-        [field]: employeeDuplicateMessages[field],
+        [field]: row?.message || employeeDuplicateMessages[field],
+      };
+    }
+
+    return result;
+  }, {});
+};
+
+export const getApiEmployeeFieldErrors = (error) => {
+  const errors = Array.isArray(error?.response?.data?.errors)
+    ? error.response.data.errors
+    : [];
+
+  return errors.reduce((result, row) => {
+    const field = String(row?.field || row?.path || "").trim();
+
+    if (
+      field === "employeeCode" ||
+      field === "employeeName" ||
+      field === "email" ||
+      field === "mobile"
+    ) {
+      return {
+        ...result,
+        [field]: row?.message || "",
       };
     }
 
