@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api/axios";
 import SearchableCheckboxSelector from "../../components/SearchableCheckboxSelector";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import Toast from "../../components/Toast";
+import { showToast } from "../../utils/toastUtils";
 
-
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const getEmployeeDirectorLabel = (employee) => {
   const code = String(employee?.employeeCode || "").trim();
@@ -51,7 +54,6 @@ const buildDirectorSelectionState = (savedDirectorNames = [], employeeRows = [])
   return { selectedEmployeeIds, legacyDirectorNames };
 };
 
-
 const getBackendError = (err) => {
   const data = err?.response?.data;
   const errors = Array.isArray(data?.errors) ? data.errors : [];
@@ -60,14 +62,7 @@ const getBackendError = (err) => {
   return "Something went wrong. Please try again.";
 };
 
-
-
-const showToast = (setToast, message) => {
-  setToast(message);
-  setTimeout(() => setToast(""), 3000);
-};
-
-
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CompanyMaster() {
   const [companies, setCompanies]                     = useState([]);
@@ -77,15 +72,21 @@ export default function CompanyMaster() {
   const [legacyDirectorNames, setLegacyDirectorNames] = useState([]);
   const [editingId, setEditingId]                     = useState("");
   const [loading, setLoading]                         = useState(false);
-  const [nameError, setNameError]                     = useState(""); // from backend only
-  const [toast, setToast]                             = useState(""); // success message
+  const [deleteLoading, setDeleteLoading]             = useState(false);
+  const [nameError, setNameError]                     = useState("");
+  const [deleteTarget, setDeleteTarget]               = useState(null);
+
+  // Toast state: { show, message, variant }
+  const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
+
+  const formRef = useRef(null);
 
   useEffect(() => {
     fetchCompanies();
     fetchEmployees();
   }, []);
 
-  
+  // ── Derived ─────────────────────────────────────────────────────────────────
 
   const employeeOptions = useMemo(
     () =>
@@ -100,7 +101,21 @@ export default function CompanyMaster() {
     [employees]
   );
 
-  
+  const liveNameError = useMemo(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return "";
+    if (trimmed.length > 100) return "Company name must not exceed 100 characters.";
+    const isDuplicate = companies.some(
+      (c) =>
+        String(c._id) !== String(editingId) &&
+        c.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    return isDuplicate ? "This company name already exists." : "";
+  }, [name, companies, editingId]);
+
+  const displayError = liveNameError || nameError;
+
+  // ── API ─────────────────────────────────────────────────────────────────────
 
   const fetchCompanies = async () => {
     try {
@@ -122,7 +137,7 @@ export default function CompanyMaster() {
     }
   };
 
-  
+  // ── Form ─────────────────────────────────────────────────────────────────────
 
   const resetForm = () => {
     setName("");
@@ -132,19 +147,16 @@ export default function CompanyMaster() {
     setNameError("");
   };
 
-  
-
   const saveCompany = async () => {
+    if (liveNameError) return;
     setLoading(true);
     setNameError("");
-
     try {
       const payload = {
-         name: name.trim(),
+        name: name.trim(),
         directorEmployeeIds,
         directorNames: legacyDirectorNames,
       };
-
       if (editingId) {
         await api.put(`/companies/${editingId}`, payload);
         showToast(setToast, "Company updated successfully!");
@@ -152,44 +164,44 @@ export default function CompanyMaster() {
         await api.post("/companies", payload);
         showToast(setToast, "Company added successfully!");
       }
-
       resetForm();
       fetchCompanies();
     } catch (err) {
-     
       setNameError(getBackendError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Edit ─────────────────────────────────────────────────────────────────────
-
   const editRow = (row) => {
     const { selectedEmployeeIds, legacyDirectorNames: legacyNames } =
       buildDirectorSelectionState(row.directorNames || [], employees);
-
     setName(row.name || "");
     setDirectorEmployeeIds(selectedEmployeeIds);
     setLegacyDirectorNames(legacyNames);
     setEditingId(row._id);
     setNameError("");
-    setToast("");
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
-  
-
-  const deleteRow = async (id) => {
-    if (!window.confirm("Delete this company?")) return;
-
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await api.delete(`/companies/${id}`);
-      if (editingId === id) resetForm();
-      setNameError(""); 
-      fetchCompanies();
-      showToast(setToast, "Company deleted successfully!");
+      await api.delete(`/companies/${deleteTarget.id}`);
+      if (editingId === deleteTarget.id) resetForm();
+      setNameError("");
+      setCompanies((prev) =>
+        prev.filter((c) => String(c._id) !== String(deleteTarget.id))
+      );
+      showToast(setToast, `"${deleteTarget.name}" deleted successfully!`);
     } catch (err) {
-      alert(err.response?.data?.message || "Delete failed");
+      showToast(setToast, err.response?.data?.message || "Delete failed.", "error");
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -198,24 +210,31 @@ export default function CompanyMaster() {
   return (
     <div className="container mt-4 mb-5">
 
-      {/* Success toast — auto hides after 3 seconds */}
-      {toast && (
-        <div
-          className="alert alert-success alert-dismissible d-flex align-items-center gap-2 mb-3"
-          role="alert"
-        >
-          <span>✓</span>
-          <span>{toast}</span>
-          <button
-            type="button"
-            className="btn-close ms-auto"
-            onClick={() => setToast("")}
-            aria-label="Close"
-          />
-        </div>
-      )}
+      {/* ── Reusable confirm dialog ── */}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        variant="danger"
+        title="Delete Company"
+        message={
+          <>
+            Are you sure you want to delete{" "}
+            <strong>{deleteTarget?.name}</strong>?{" "}
+            This action cannot be undone.
+          </>
+        }
+        confirmLabel="Yes, Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
+      />
 
-      {/* Page header */}
+      {/* ── Reusable toast ── */}
+      <Toast
+        toast={toast}
+        onClose={() => setToast((t) => ({ ...t, show: false }))}
+      />
+
+      {/* ── Page header ── */}
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -234,25 +253,26 @@ export default function CompanyMaster() {
         </div>
       </div>
 
-      {/* Form */}
-      <div className="soft-card mb-4">
+      {/* ── Form ── */}
+      <div className="soft-card mb-4" ref={formRef}>
         <div className="row g-3">
           <div className="col-lg-4">
             <label className="form-label fw-semibold">Company Name</label>
             <input
-              className={`form-control${nameError ? " is-invalid" : ""}`}
+              className={`form-control${displayError ? " is-invalid" : ""}`}
               placeholder="Company Name"
               value={name}
+              maxLength={101}
               onChange={(e) => {
                 setName(e.target.value);
-                setNameError(""); 
+                setNameError("");
               }}
-              aria-invalid={nameError ? "true" : "false"}
-              aria-describedby={nameError ? "company-name-error" : undefined}
+              aria-invalid={displayError ? "true" : "false"}
+              aria-describedby={displayError ? "company-name-error" : undefined}
             />
-            {nameError && (
+            {displayError && (
               <div className="invalid-feedback d-block" id="company-name-error">
-                {nameError}
+                {displayError}
               </div>
             )}
           </div>
@@ -270,7 +290,6 @@ export default function CompanyMaster() {
           </div>
         </div>
 
-        {/* Legacy director names */}
         {legacyDirectorNames.length > 0 && (
           <div className="alert alert-warning py-2 mt-3 mb-0 d-flex justify-content-between align-items-center gap-2">
             <span>Legacy company directors preserved: {legacyDirectorNames.join(", ")}</span>
@@ -284,12 +303,11 @@ export default function CompanyMaster() {
           </div>
         )}
 
-        {/* Buttons */}
         <div className="d-flex gap-2 mt-3">
           <button
             className="btn btn-success"
             onClick={saveCompany}
-            disabled={loading}
+            disabled={loading || Boolean(liveNameError)}
           >
             {loading ? "Saving..." : editingId ? "Update Company" : "Save Company"}
           </button>
@@ -301,10 +319,10 @@ export default function CompanyMaster() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="table-shell">
         <div className="table-responsive">
-          <table className="table table-bordered align-middle">
+          <table className="table table-bordered table-hover align-middle">
             <thead className="table-light">
               <tr>
                 <th>#</th>
@@ -339,7 +357,9 @@ export default function CompanyMaster() {
                       </button>
                       <button
                         className="btn btn-sm btn-danger"
-                        onClick={() => deleteRow(company._id)}
+                        onClick={() =>
+                          setDeleteTarget({ id: company._id, name: company.name })
+                        }
                       >
                         Delete
                       </button>
