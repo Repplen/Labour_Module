@@ -1,43 +1,36 @@
-const lettersAndSpacesPattern = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/;
+// ─────────────────────────────────────────────────────────────
+// frontend/src/utils/masterNameValidation.js
+// NO business rules — all validation is in the backend.
+// Functions kept so existing imports don't break.
+// ─────────────────────────────────────────────────────────────
 
+/**
+ * Trims and collapses multiple spaces.
+ * Still useful before sending data to API.
+ */
 export const normalizeMasterName = (value) =>
   String(value || "").trim().replace(/\s+/g, " ");
 
-export const validateMasterName = (value, label) => {
-  const name = normalizeMasterName(value);
+/**
+ * No frontend validation — backend handles all rules.
+ * Kept so DepartmentMaster, DesignationMaster imports don't break.
+ */
+export const validateMasterName = () => "";
 
-  if (!name) {
-    return `${label} name is required.`;
-  }
+/**
+ * No frontend validation — backend handles all rules.
+ * Kept so CompanyMaster import doesn't break.
+ */
+export const validateCompanyName = () => "";
 
-  if (!lettersAndSpacesPattern.test(name)) {
-    return `${label} name can contain only letters and spaces.`;
-  }
-
+/**
+ * Extracts the first error message from a backend API error response.
+ * Works for Zod (422) and Mongoose (400/409) shapes.
+ */
+export const getApiFieldError = (error) => {
+  const data = error?.response?.data;
+  const errors = Array.isArray(data?.errors) ? data.errors : [];
+  if (errors.length > 0) return errors[0]?.message || "";
+  if (data?.message) return data.message;
   return "";
-};
-
-export const validateCompanyName = (value) => {
-  const name = normalizeMasterName(value);
-
-  if (!name) {
-    return "Company name is required.";
-  }
-
-  if (!lettersAndSpacesPattern.test(name)) {
-    return "Company name can contain only letters and spaces.";
-  }
-
-  return "";
-};
-
-export const getApiFieldError = (error, field = "name") => {
-  const errors = Array.isArray(error?.response?.data?.errors)
-    ? error.response.data.errors
-    : [];
-  const row = errors.find(
-    (item) => String(item?.field || item?.path || "").trim() === field
-  );
-
-  return row?.message || "";
 };

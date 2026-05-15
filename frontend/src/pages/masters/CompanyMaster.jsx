@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import SearchableCheckboxSelector from "../../components/SearchableCheckboxSelector";
-import { getApiFieldError, validateCompanyName } from "../../utils/masterNameValidation";
+
+
 
 const getEmployeeDirectorLabel = (employee) => {
   const code = String(employee?.employeeCode || "").trim();
@@ -26,11 +27,8 @@ const buildDirectorSelectionState = (savedDirectorNames = [], employeeRows = [])
     ]
       .map((item) => item.toLowerCase())
       .filter(Boolean);
-
     lookups.forEach((item) => {
-      if (!byLookup.has(item)) {
-        byLookup.set(item, employeeId);
-      }
+      if (!byLookup.has(item)) byLookup.set(item, employeeId);
     });
   });
 
@@ -47,52 +45,53 @@ const buildDirectorSelectionState = (savedDirectorNames = [], employeeRows = [])
       }
       return;
     }
-
     legacyDirectorNames.push(item);
   });
 
   return { selectedEmployeeIds, legacyDirectorNames };
 };
 
-const duplicateCompanyMessage = "This company name already exists.";
 
-const normalizeCompanyName = (value) => String(value || "").trim().toLowerCase();
-
-const getApiCompanyNameDuplicateError = (error) => {
-  const errors = Array.isArray(error?.response?.data?.errors)
-    ? error.response.data.errors
-    : [];
-  const hasNameError = errors.some(
-    (row) => String(row?.field || row?.path || "").trim() === "name"
-  );
-
-  if (error?.response?.status === 409 && hasNameError) {
-    return duplicateCompanyMessage;
-  }
-
-  return "";
+const getBackendError = (err) => {
+  const data = err?.response?.data;
+  const errors = Array.isArray(data?.errors) ? data.errors : [];
+  if (errors.length > 0) return errors[0]?.message || "";
+  if (data?.message) return data.message;
+  return "Something went wrong. Please try again.";
 };
 
+
+
+const showToast = (setToast, message) => {
+  setToast(message);
+  setTimeout(() => setToast(""), 3000);
+};
+
+
+
 export default function CompanyMaster() {
-  const [companies, setCompanies] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [name, setName] = useState("");
+  const [companies, setCompanies]                     = useState([]);
+  const [employees, setEmployees]                     = useState([]);
+  const [name, setName]                               = useState("");
   const [directorEmployeeIds, setDirectorEmployeeIds] = useState([]);
   const [legacyDirectorNames, setLegacyDirectorNames] = useState([]);
-  const [editingId, setEditingId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [serverNameError, setServerNameError] = useState("");
+  const [editingId, setEditingId]                     = useState("");
+  const [loading, setLoading]                         = useState(false);
+  const [nameError, setNameError]                     = useState(""); // from backend only
+  const [toast, setToast]                             = useState(""); // success message
 
   useEffect(() => {
     fetchCompanies();
     fetchEmployees();
   }, []);
 
+  
+
   const employeeOptions = useMemo(
     () =>
       [...employees]
-        .sort((left, right) =>
-          getEmployeeDirectorLabel(left).localeCompare(getEmployeeDirectorLabel(right))
+        .sort((a, b) =>
+          getEmployeeDirectorLabel(a).localeCompare(getEmployeeDirectorLabel(b))
         )
         .map((employee) => ({
           value: employee._id,
@@ -100,22 +99,8 @@ export default function CompanyMaster() {
         })),
     [employees]
   );
-  const clientNameError = useMemo(() => {
-    const validationMessage = validateCompanyName(name);
-    if (validationMessage) return validationMessage;
 
-    const nextName = normalizeCompanyName(name);
-
-    const hasDuplicate = companies.some(
-      (company) =>
-        String(company?._id || "") !== String(editingId || "") &&
-        normalizeCompanyName(company?.name) === nextName
-    );
-
-    return hasDuplicate ? duplicateCompanyMessage : "";
-  }, [companies, editingId, name]);
-  const nameError = clientNameError || serverNameError;
-  const hasNameError = Boolean(nameError);
+  
 
   const fetchCompanies = async () => {
     try {
@@ -137,53 +122,48 @@ export default function CompanyMaster() {
     }
   };
 
+  
+
   const resetForm = () => {
     setName("");
     setDirectorEmployeeIds([]);
     setLegacyDirectorNames([]);
     setEditingId("");
-    setServerNameError("");
+    setNameError("");
   };
 
-  const saveCompany = async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName || hasNameError) return;
+  
 
+  const saveCompany = async () => {
     setLoading(true);
-    setServerNameError("");
+    setNameError("");
 
     try {
       const payload = {
-        name: trimmedName,
+         name: name.trim(),
         directorEmployeeIds,
         directorNames: legacyDirectorNames,
       };
 
       if (editingId) {
         await api.put(`/companies/${editingId}`, payload);
+        showToast(setToast, "Company updated successfully!");
       } else {
         await api.post("/companies", payload);
+        showToast(setToast, "Company added successfully!");
       }
 
       resetForm();
       fetchCompanies();
     } catch (err) {
-      const duplicateError = getApiCompanyNameDuplicateError(err);
-      if (duplicateError) {
-        setServerNameError(duplicateError);
-        return;
-      }
-      const fieldError = getApiFieldError(err);
-      if (fieldError) {
-        setServerNameError(fieldError);
-        return;
-      }
-
-      alert(err.response?.data?.message || "Save failed");
+     
+      setNameError(getBackendError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  // ── Edit ─────────────────────────────────────────────────────────────────────
 
   const editRow = (row) => {
     const { selectedEmployeeIds, legacyDirectorNames: legacyNames } =
@@ -193,8 +173,11 @@ export default function CompanyMaster() {
     setDirectorEmployeeIds(selectedEmployeeIds);
     setLegacyDirectorNames(legacyNames);
     setEditingId(row._id);
-    setServerNameError("");
+    setNameError("");
+    setToast("");
   };
+
+  
 
   const deleteRow = async (id) => {
     if (!window.confirm("Delete this company?")) return;
@@ -202,14 +185,37 @@ export default function CompanyMaster() {
     try {
       await api.delete(`/companies/${id}`);
       if (editingId === id) resetForm();
+      setNameError(""); 
       fetchCompanies();
+      showToast(setToast, "Company deleted successfully!");
     } catch (err) {
       alert(err.response?.data?.message || "Delete failed");
     }
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   return (
     <div className="container mt-4 mb-5">
+
+      {/* Success toast — auto hides after 3 seconds */}
+      {toast && (
+        <div
+          className="alert alert-success alert-dismissible d-flex align-items-center gap-2 mb-3"
+          role="alert"
+        >
+          <span>✓</span>
+          <span>{toast}</span>
+          <button
+            type="button"
+            className="btn-close ms-auto"
+            onClick={() => setToast("")}
+            aria-label="Close"
+          />
+        </div>
+      )}
+
+      {/* Page header */}
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -219,7 +225,6 @@ export default function CompanyMaster() {
               Maintain company names and director mappings with searchable selections.
             </p>
           </div>
-
           <div className="list-summary">
             <span className="summary-chip">{companies.length} companies</span>
             <span className="summary-chip summary-chip--neutral">
@@ -229,6 +234,7 @@ export default function CompanyMaster() {
         </div>
       </div>
 
+      {/* Form */}
       <div className="soft-card mb-4">
         <div className="row g-3">
           <div className="col-lg-4">
@@ -237,18 +243,18 @@ export default function CompanyMaster() {
               className={`form-control${nameError ? " is-invalid" : ""}`}
               placeholder="Company Name"
               value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setServerNameError("");
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError(""); 
               }}
               aria-invalid={nameError ? "true" : "false"}
-              aria-describedby={nameError ? "company-name-duplicate-error" : undefined}
+              aria-describedby={nameError ? "company-name-error" : undefined}
             />
-            {nameError ? (
-              <div className="invalid-feedback d-block" id="company-name-duplicate-error">
+            {nameError && (
+              <div className="invalid-feedback d-block" id="company-name-error">
                 {nameError}
               </div>
-            ) : null}
+            )}
           </div>
 
           <div className="col-lg-8">
@@ -264,6 +270,7 @@ export default function CompanyMaster() {
           </div>
         </div>
 
+        {/* Legacy director names */}
         {legacyDirectorNames.length > 0 && (
           <div className="alert alert-warning py-2 mt-3 mb-0 d-flex justify-content-between align-items-center gap-2">
             <span>Legacy company directors preserved: {legacyDirectorNames.join(", ")}</span>
@@ -277,22 +284,24 @@ export default function CompanyMaster() {
           </div>
         )}
 
+        {/* Buttons */}
         <div className="d-flex gap-2 mt-3">
           <button
             className="btn btn-success"
             onClick={saveCompany}
-            disabled={loading || hasNameError}
+            disabled={loading}
           >
             {loading ? "Saving..." : editingId ? "Update Company" : "Save Company"}
           </button>
-          {editingId ? (
+          {editingId && (
             <button className="btn btn-outline-secondary" onClick={resetForm}>
               Cancel
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
+      {/* Table */}
       <div className="table-shell">
         <div className="table-responsive">
           <table className="table table-bordered align-middle">
@@ -316,7 +325,11 @@ export default function CompanyMaster() {
                   <tr key={company._id}>
                     <td>{index + 1}</td>
                     <td>{company.name}</td>
-                    <td>{company.directorNames?.length ? company.directorNames.join(", ") : "-"}</td>
+                    <td>
+                      {company.directorNames?.length
+                        ? company.directorNames.join(", ")
+                        : "-"}
+                    </td>
                     <td>
                       <button
                         className="btn btn-sm btn-warning me-2"
