@@ -1,36 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api/axios";
-import { getApiFieldError, validateMasterName } from "../../utils/masterNameValidation";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import Toast from "../../components/Toast";
+import { showToast } from "../../utils/toastUtils";
 
-const duplicateDesignationMessage = "This designation name already exists.";
-
-const normalizeMasterName = (value) => String(value || "").trim().toLowerCase();
-
-const getApiNameDuplicateError = (error) => {
-  const errors = Array.isArray(error?.response?.data?.errors)
-    ? error.response.data.errors
-    : [];
-  const hasNameError = errors.some(
-    (row) => String(row?.field || row?.path || "").trim() === "name"
-  );
-
-  if (error?.response?.status === 409 && hasNameError) {
-    return duplicateDesignationMessage;
-  }
-
-  return "";
+const getBackendError = (err) => {
+  const data = err?.response?.data;
+  const errors = Array.isArray(data?.errors) ? data.errors : [];
+  if (errors.length > 0) return errors[0]?.message || "";
+  if (data?.message) return data.message;
+  return "Something went wrong. Please try again.";
 };
 
 export default function DesignationMaster() {
-  const [list, setList] = useState([]);
-  const [name, setName] = useState("");
-  const [editingId, setEditingId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [serverNameError, setServerNameError] = useState("");
+  const [list, setList]               = useState([]);
+  const [name, setName]               = useState("");
+  const [editingId, setEditingId]     = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [nameError, setNameError]     = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [toast, setToast]             = useState({ show: false, message: "", variant: "success" });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const formRef = useRef(null);
+
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
@@ -41,57 +36,53 @@ export default function DesignationMaster() {
       setList([]);
     }
   };
-  const clientNameError = useMemo(() => {
-    const validationMessage = validateMasterName(name, "Designation");
-    if (validationMessage) return validationMessage;
 
-    const nextName = normalizeMasterName(name);
-
-    const hasDuplicate = list.some(
-      (designation) =>
-        String(designation?._id || "") !== String(editingId || "") &&
-        normalizeMasterName(designation?.name) === nextName
+  // "required" only shows after user touches the field — same pattern as CompanyMaster
+  const liveNameError = useMemo(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return nameTouched ? "Designation name is required." : "";
+    if (trimmed.length < 2) return "Designation name must be at least 2 characters.";
+    if (trimmed.length > 100) return "Designation name must not exceed 100 characters.";
+    if (!/[a-zA-Z0-9]/.test(trimmed))
+      return "Designation name must contain at least one letter or number.";
+    const isDuplicate = list.some(
+      (d) =>
+        String(d._id) !== String(editingId) &&
+        d.name.trim().toLowerCase() === trimmed.toLowerCase()
     );
+    return isDuplicate ? "This designation name already exists." : "";
+  }, [name, list, editingId, nameTouched]);
 
-    return hasDuplicate ? duplicateDesignationMessage : "";
-  }, [editingId, list, name]);
-  const nameError = clientNameError || serverNameError;
-  const hasNameError = Boolean(nameError);
+  const displayError = liveNameError || nameError;
 
   const resetForm = () => {
     setName("");
     setEditingId("");
-    setServerNameError("");
+    setNameError("");
+    setNameTouched(false);
   };
 
   const saveData = async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName || hasNameError) return;
+    if (!name.trim()) {
+      setNameTouched(true);
+      return;
+    }
+    if (liveNameError) return;
 
     setLoading(true);
-    setServerNameError("");
+    setNameError("");
     try {
       if (editingId) {
-        await api.put(`/designations/${editingId}`, { name: trimmedName });
+        await api.put(`/designations/${editingId}`, { name: name.trim() });
+        showToast(setToast, "Designation updated successfully!");
       } else {
-        await api.post("/designations", { name: trimmedName });
+        await api.post("/designations", { name: name.trim() });
+        showToast(setToast, "Designation added successfully!");
       }
-
       resetForm();
       fetchData();
     } catch (err) {
-      const duplicateError = getApiNameDuplicateError(err);
-      if (duplicateError) {
-        setServerNameError(duplicateError);
-        return;
-      }
-      const fieldError = getApiFieldError(err);
-      if (fieldError) {
-        setServerNameError(fieldError);
-        return;
-      }
-
-      alert(err.response?.data?.message || "Save failed");
+      setNameError(getBackendError(err));
     } finally {
       setLoading(false);
     }
@@ -100,23 +91,56 @@ export default function DesignationMaster() {
   const editRow = (row) => {
     setName(row.name || "");
     setEditingId(row._id);
-    setServerNameError("");
+    setNameError("");
+    setNameTouched(false);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
-  const deleteRow = async (id) => {
-    if (!window.confirm("Delete this designation?")) return;
-
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await api.delete(`/designations/${id}`);
-      if (editingId === id) resetForm();
+      await api.delete(`/designations/${deleteTarget.id}`);
+      if (editingId === deleteTarget.id) resetForm();
+      setList((prev) => prev.filter((d) => String(d._id) !== String(deleteTarget.id)));
       fetchData();
+      showToast(setToast, `"${deleteTarget.name}" deleted successfully!`);
     } catch (err) {
-      alert(err.response?.data?.message || "Delete failed");
+      showToast(setToast, err.response?.data?.message || "Delete failed.", "error");
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
   return (
     <div className="container mt-4 mb-5">
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        variant="danger"
+        title="Delete Designation"
+        message={
+          <>
+            Are you sure you want to delete{" "}
+            <strong>{deleteTarget?.name}</strong>?{" "}
+            This action cannot be undone.
+          </>
+        }
+        confirmLabel="Yes, Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
+      />
+
+      <Toast
+        toast={toast}
+        onClose={() => setToast((t) => ({ ...t, show: false }))}
+      />
+
+      {/* ── Page header ── */}
       <div className="page-intro-card mb-4">
         <div className="list-toolbar">
           <div>
@@ -126,50 +150,58 @@ export default function DesignationMaster() {
               Maintain designation names used across employee and workflow setup.
             </p>
           </div>
-
           <div className="list-summary">
             <span className="summary-chip">{list.length} designations</span>
           </div>
         </div>
       </div>
 
-      <div className="soft-card mb-4">
-        <input
-          className={`form-control${nameError ? " is-invalid" : " mb-2"}`}
-          placeholder="Designation Name"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setServerNameError("");
-          }}
-          aria-invalid={nameError ? "true" : "false"}
-          aria-describedby={nameError ? "designation-name-duplicate-error" : undefined}
-        />
-        {nameError ? (
-          <div className="invalid-feedback d-block mb-2" id="designation-name-duplicate-error">
-            {nameError}
+      {/* ── Form ── */}
+      <div className="soft-card mb-4" ref={formRef}>
+        <div className="row g-3">
+          <div className="col-lg-4">
+            <label className="form-label fw-semibold">Designation Name</label>
+            <input
+              className={`form-control${displayError ? " is-invalid" : ""}`}
+              placeholder="e.g. Software Engineer"
+              value={name}
+              maxLength={100}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError("");
+                setNameTouched(true);
+              }}
+              aria-invalid={displayError ? "true" : "false"}
+              aria-describedby={displayError ? "designation-name-error" : undefined}
+            />
+            {displayError && (
+              <div className="invalid-feedback d-block" id="designation-name-error">
+                {displayError}
+              </div>
+            )}
           </div>
-        ) : null}
+        </div>
 
-        <div className="d-flex flex-wrap gap-2">
+        <div className="d-flex gap-2 mt-3">
           <button
             className="btn btn-success"
             onClick={saveData}
-            disabled={loading || hasNameError}
+            disabled={loading || Boolean(liveNameError)}
           >
-            {loading ? "Saving..." : editingId ? "Update" : "Save"}
+            {loading ? "Saving..." : editingId ? "Update Designation" : "Save Designation"}
           </button>
           {editingId && (
-            <button className="btn btn-secondary" onClick={resetForm}>
+            <button className="btn btn-outline-secondary" onClick={resetForm}>
               Cancel
             </button>
           )}
         </div>
       </div>
 
+      {/* ── Table ── */}
       <div className="table-shell">
         <div className="table-responsive">
-          <table className="table table-bordered mb-0">
+          <table className="table table-bordered table-hover align-middle mb-0">
             <thead>
               <tr>
                 <th>#</th>
@@ -178,22 +210,33 @@ export default function DesignationMaster() {
               </tr>
             </thead>
             <tbody>
-              {list.map((d, i) => (
-                <tr key={d._id}>
-                  <td>{i + 1}</td>
-                  <td>{d.name}</td>
-                  <td>
-                    <div className="d-flex flex-wrap gap-2">
-                      <button className="btn btn-sm btn-warning" onClick={() => editRow(d)}>
-                        Edit
-                      </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => deleteRow(d._id)}>
-                        Delete
-                      </button>
-                    </div>
+              {list.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="text-center py-4 text-muted">
+                    No designations found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                list.map((d, i) => (
+                  <tr key={d._id}>
+                    <td>{i + 1}</td>
+                    <td>{d.name}</td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-sm btn-warning" onClick={() => editRow(d)}>
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => setDeleteTarget({ id: d._id, name: d.name })}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

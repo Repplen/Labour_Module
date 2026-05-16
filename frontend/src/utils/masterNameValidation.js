@@ -12,16 +12,24 @@ export const normalizeMasterName = (value) =>
   String(value || "").trim().replace(/\s+/g, " ");
 
 /**
- * No frontend validation — backend handles all rules.
- * Kept so DepartmentMaster, DesignationMaster imports don't break.
+ * Validates a master name (Designation, Department, Site, etc.).
+ * Returns an error string, or "" if valid.
  */
-export const validateMasterName = () => "";
+export const validateMasterName = (value, label = "Name") => {
+  const name = String(value || "").trim().replace(/\s+/g, " ");
+  if (!name) return `${label} name is required.`;
+  if (name.length < 2) return `${label} name must be at least 2 characters.`;
+  if (name.length > 100) return `${label} name must not exceed 100 characters.`;
+  if (!/[a-zA-Z0-9]/.test(name))
+    return `${label} name must contain at least one letter or number.`;
+  return "";
+};
 
 /**
- * No frontend validation — backend handles all rules.
- * Kept so CompanyMaster import doesn't break.
+ * Validates a company name (same rules, different label).
+ * Returns an error string, or "" if valid.
  */
-export const validateCompanyName = () => "";
+export const validateCompanyName = (value) => validateMasterName(value, "Company");
 
 /**
  * Extracts the first error message from a backend API error response.
