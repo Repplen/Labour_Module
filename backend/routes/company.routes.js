@@ -30,6 +30,7 @@ const sendDuplicateCompanyResponse = (res) =>
 const findDuplicateCompany = (name, currentCompanyId = null) => {
   const filter = {
     name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+    isActive: { $ne: false },
   };
 
   if (currentCompanyId) {
@@ -143,7 +144,22 @@ router.post("/", auth, requirePermission("company_master", "add"), async (req, r
     const duplicateCompany = await findDuplicateCompany(name);
     if (duplicateCompany) return sendDuplicateCompanyResponse(res);
 
-    const data = await Company.create({ name, directorNames });
+    // Reactivate a soft-deleted company with the same name instead of inserting
+    // a new document (avoids unique-index conflict if the index has no partial filter).
+    const softDeleted = await Company.findOne({
+      name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+      isActive: false,
+    });
+
+    let data;
+    if (softDeleted) {
+      softDeleted.name = name;
+      softDeleted.directorNames = directorNames;
+      softDeleted.isActive = true;
+      data = await softDeleted.save();
+    } else {
+      data = await Company.create({ name, directorNames });
+    }
     res.status(201).json(data);
   } catch (err) {
     if (err?.code === 11000) {

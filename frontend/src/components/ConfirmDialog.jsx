@@ -65,7 +65,7 @@ export default function ConfirmDialog({
 
   return (
     <>
-      {/* Backdrop */}r
+      {/* Backdrop */}
       <div
         onClick={() => { if (!loading) onCancel?.(); }}
         style={{
@@ -118,26 +118,6 @@ export default function ConfirmDialog({
             alignItems:    "center",
             gap:           "0",
           }}>
-{/* 
-            {/* Tag label 
-            <span style={{
-              display:       "inline-flex",
-              alignItems:    "center",
-              padding:       "0.25rem 0.75rem",
-              borderRadius:  "999px",
-              background:    config.accentBg,
-              color:         config.accentColor,
-              fontSize:      "0.7rem",
-              fontWeight:    700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              marginBottom:  "1.25rem",
-              border:        `1px solid ${config.iconBorder}`,
-            }}>
-              {config.tagLabel}
-            </span>
-            */}
-
             {/* Icon */}
             <div style={{
               width:          "72px",

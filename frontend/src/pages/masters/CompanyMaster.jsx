@@ -75,11 +75,13 @@ export default function CompanyMaster() {
   const [deleteLoading, setDeleteLoading]             = useState(false);
   const [nameError, setNameError]                     = useState("");
   const [deleteTarget, setDeleteTarget]               = useState(null);
+  const [nameTouched, setNameTouched]                 = useState(false);
 
   // Toast state: { show, message, variant }
   const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
 
   const formRef = useRef(null);
+  const fetchVersionRef = useRef(0);
 
   useEffect(() => {
     fetchCompanies();
@@ -103,25 +105,30 @@ export default function CompanyMaster() {
 
   const liveNameError = useMemo(() => {
     const trimmed = name.trim();
-    if (!trimmed) return "";
+    if (!trimmed) return nameTouched ? "Company name is required." : "";
+    if (trimmed.length < 2) return "Company name must be at least 2 characters.";
     if (trimmed.length > 100) return "Company name must not exceed 100 characters.";
+    if (!/[a-zA-Z0-9]/.test(trimmed)) return "Company name must contain at least one letter or number.";
     const isDuplicate = companies.some(
       (c) =>
         String(c._id) !== String(editingId) &&
         c.name.trim().toLowerCase() === trimmed.toLowerCase()
     );
     return isDuplicate ? "This company name already exists." : "";
-  }, [name, companies, editingId]);
+  }, [name, companies, editingId, nameTouched]);
 
   const displayError = liveNameError || nameError;
 
   // ── API ─────────────────────────────────────────────────────────────────────
 
   const fetchCompanies = async () => {
+    const version = ++fetchVersionRef.current;
     try {
       const res = await api.get("/companies");
+      if (version !== fetchVersionRef.current) return;
       setCompanies(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
+      if (version !== fetchVersionRef.current) return;
       console.error("Load companies failed:", err);
       setCompanies([]);
     }
@@ -145,9 +152,14 @@ export default function CompanyMaster() {
     setLegacyDirectorNames([]);
     setEditingId("");
     setNameError("");
+    setNameTouched(false);
   };
 
   const saveCompany = async () => {
+    if (!name.trim()) {
+      setNameTouched(true);
+      return;
+    }
     if (liveNameError) return;
     setLoading(true);
     setNameError("");
@@ -181,6 +193,7 @@ export default function CompanyMaster() {
     setLegacyDirectorNames(legacyNames);
     setEditingId(row._id);
     setNameError("");
+    setNameTouched(false);
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
@@ -196,6 +209,7 @@ export default function CompanyMaster() {
       setCompanies((prev) =>
         prev.filter((c) => String(c._id) !== String(deleteTarget.id))
       );
+      fetchCompanies();
       showToast(setToast, `"${deleteTarget.name}" deleted successfully!`);
     } catch (err) {
       showToast(setToast, err.response?.data?.message || "Delete failed.", "error");
@@ -262,10 +276,11 @@ export default function CompanyMaster() {
               className={`form-control${displayError ? " is-invalid" : ""}`}
               placeholder="Company Name"
               value={name}
-              maxLength={101}
+              maxLength={100}
               onChange={(e) => {
                 setName(e.target.value);
                 setNameError("");
+                setNameTouched(true);
               }}
               aria-invalid={displayError ? "true" : "false"}
               aria-describedby={displayError ? "company-name-error" : undefined}
