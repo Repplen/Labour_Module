@@ -1,0 +1,230 @@
+/* ── Page Structure ───────────────────────────────────────── */
+.filter-card,
+.soft-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.35rem;
+}
+
+/* ── Page Intro Card ─────────────────────────────────────── */
+.page-intro-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-left: 4px solid var(--brand-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.5rem 1.75rem;
+}
+.page-intro-card::after {
+  content: "";
+  position: absolute;
+  top: -3rem; right: -3rem;
+  width: 11rem; height: 11rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--brand-accent-muted) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+}
+.page-intro-card > * { position: relative; z-index: 1; }
+
+/* ── Table Shell ─────────────────────────────────────────── */
+.table-shell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.table-shell .table { margin-bottom: 0; background: var(--surface); }
+.table-shell .table > thead > tr > *:first-child,
+.table-shell .table > tbody > tr > *:first-child,
+.table-shell .table > tfoot > tr > *:first-child { border-left: none !important; }
+.table-shell .table > thead > tr > *:last-child,
+.table-shell .table > tbody > tr > *:last-child,
+.table-shell .table > tfoot > tr > *:last-child  { border-right: none !important; }
+.table-shell .table > thead > tr:first-child > * { border-top: none !important; }
+.table-shell .table > tbody > tr:last-child > *,
+.table-shell .table > tfoot > tr:last-child > *  { border-bottom: none !important; }
+
+/* ── Toolbar ──────────────────────────────────────────────── */
+.list-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.list-summary { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+/* ── Summary Chips ───────────────────────────────────────── */
+.summary-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.32rem 0.9rem; border-radius: var(--radius-full);
+  background: var(--brand-muted); color: var(--brand-dark);
+  border: 1px solid var(--brand-glow);
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.01em;
+}
+.summary-chip--neutral {
+  background: var(--surface-mid); color: var(--ink-muted);
+  border-color: var(--border);
+}
+
+/* ── Kicker ──────────────────────────────────────────────── */
+.page-kicker {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--brand-accent); margin-bottom: 0.25rem;
+}
+.page-kicker::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  flex-shrink: 0;
+}
+
+/* ── Page Intro Card — title & subtitle ──────────────────── */
+.page-intro-card h3,
+.page-intro-card h4 {
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.page-subtitle, .form-help { color: var(--ink-muted); font-size: var(--text-sm); line-height: 1.6; max-width: 52rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE STAT CARDS  — reusable hero stats row
+   Used by: employee directory, chat pages, any page-intro-card
+   ═══════════════════════════════════════════════════════════ */
+.employee-directory-stats,
+.page-stats-row,
+.chat-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.employee-directory-stat-card,
+.page-stat-card,
+.chat-hero-stat {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.employee-directory-stat-card:hover,
+.page-stat-card:hover,
+.chat-hero-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.employee-directory-stat-card__label,
+.page-stat-card__label,
+.chat-hero-stat__label {
+  font-size: var(--text-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink-muted); margin-bottom: 0.3rem;
+}
+.employee-directory-stat-card__value,
+.page-stat-card__value,
+.chat-hero-stat__value {
+  font-size: var(--text-2xl); font-weight: 800;
+  color: var(--ink); letter-spacing: -0.02em; line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.employee-directory-stat-card__meta,
+.page-stat-card__meta {
+  font-size: var(--text-xs); color: var(--ink-muted); line-height: 1.4;
+}
+
+/* Accent variants */
+.employee-directory-stat-card--primary,
+.page-stat-card--primary,
+.chat-hero-stat--primary  { border-left-color: var(--brand-accent); }
+.employee-directory-stat-card--primary .employee-directory-stat-card__value,
+.page-stat-card--primary .page-stat-card__value,
+.chat-hero-stat--primary .chat-hero-stat__value { color: var(--brand-accent); }
+
+.employee-directory-stat-card--success,
+.page-stat-card--success,
+.chat-hero-stat--success  { border-left-color: var(--success); }
+.employee-directory-stat-card--success .employee-directory-stat-card__value,
+.page-stat-card--success .page-stat-card__value,
+.chat-hero-stat--success .chat-hero-stat__value { color: var(--success); }
+
+.employee-directory-stat-card--neutral,
+.page-stat-card--neutral,
+.chat-hero-stat--neutral  { border-left-color: var(--border-mid); }
+
+.employee-directory-stat-card--accent,
+.page-stat-card--accent,
+.chat-hero-stat--accent   { border-left-color: var(--brand-deep); }
+.employee-directory-stat-card--accent .employee-directory-stat-card__value,
+.page-stat-card--accent .page-stat-card__value,
+.chat-hero-stat--accent .chat-hero-stat__value { color: var(--brand-deep); }
+
+.employee-directory-stat-card--danger,
+.page-stat-card--danger,
+.chat-hero-stat--danger   { border-left-color: var(--danger); }
+.employee-directory-stat-card--danger .employee-directory-stat-card__value,
+.page-stat-card--danger .page-stat-card__value,
+.chat-hero-stat--danger .chat-hero-stat__value { color: var(--danger); }
+
+.employee-directory-stat-card--warning,
+.page-stat-card--warning,
+.chat-hero-stat--warning  { border-left-color: var(--warning); }
+.employee-directory-stat-card--warning .employee-directory-stat-card__value,
+.page-stat-card--warning .page-stat-card__value,
+.chat-hero-stat--warning .chat-hero-stat__value { color: var(--warning); }
+
+/* ── Employee directory — element styles (table layout) ───── */
+.employee-directory-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--border-soft);
+}
+.employee-directory-avatar-fallback {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  background: var(--brand-muted);
+  color: var(--brand);
+  font-size: var(--text-sm); font-weight: 700;
+}
+.employee-directory-code {
+  font-size: var(--text-xs); font-family: var(--font-mono);
+  color: var(--ink-muted);
+  background: var(--surface-soft);
+  border-radius: var(--radius-full);
+  padding: 0.1rem 0.5rem;
+}
+.employee-directory-cell-stack { display: flex; flex-direction: column; gap: 0.1rem; }
+.employee-directory-primary { font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.employee-directory-secondary { font-size: var(--text-xs); color: var(--ink-muted); }
+.employee-directory-pill {
+  display: inline-block;
+  padding: 0.18rem 0.65rem; border-radius: var(--radius-full);
+  background: var(--brand-accent-muted); color: var(--brand-accent);
+  border: 1px solid var(--brand-accent-glow);
+  font-size: var(--text-xs); font-weight: 700; white-space: nowrap;
+}
+.employee-directory-actions { display: flex; gap: 0.4rem; }
+.employee-directory-filter-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.employee-directory-filter-pill {
+  display: inline-flex; align-items: center;
+  padding: 0.2rem 0.7rem; border-radius: var(--radius-full);
+  background: var(--brand-accent-muted); color: var(--brand-accent);
+  border: 1px solid var(--brand-accent-glow);
+  font-size: var(--text-xs); font-weight: 600;
+}

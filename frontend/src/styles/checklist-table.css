@@ -1,0 +1,30 @@
+/* ── Checklist Master Table ───────────────────────────────── */
+.checklist-master-table { min-width: 1420px; }
+.checklist-master-table thead tr:first-child th { position: sticky; top: 0; z-index: 4; }
+.checklist-master-table .checklist-table-filter-row th {
+  position: sticky; top: 42px; z-index: 3; padding: 0.38rem;
+  background-color: var(--ink) !important; color: #fff !important;
+  letter-spacing: 0; font-size: 0.78rem; vertical-align: middle;
+}
+.checklist-table-filter-control { min-width: 104px; height: 31px; font-size: 0.78rem; border-color: rgba(255,255,255,0.32); background: rgba(255,255,255,0.08); color: #fff; }
+.checklist-table-filter-control::placeholder { color: rgba(255,255,255,0.5); }
+.checklist-table-filter-actions { display: flex; align-items: center; justify-content: center; gap: 0.35rem; min-width: 112px; }
+.checklist-table-filter-actions .btn { min-height: 31px; padding-inline: 0.55rem; font-size: 0.76rem; white-space: nowrap; }
+
+/* ── Selection Panel ──────────────────────────────────────── */
+.selection-panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 1rem; box-shadow: var(--shadow-xs); }
+.selection-panel--disabled { opacity: 0.6; pointer-events: none; }
+.selection-panel__list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.25rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.4rem; background: var(--surface-soft); box-shadow: none; }
+
+.selection-chip { display: inline-flex; align-items: center; padding: 0.22rem 0.7rem; border-radius: var(--radius-full); background: var(--brand-muted); color: var(--brand-deep); border: 1px solid var(--brand-glow); font-size: var(--text-xs); font-weight: 600; }
+.selection-count-badge { display: inline-flex; align-items: center; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); background: var(--brand); color: #fff; font-size: var(--text-xs); font-weight: 700; box-shadow: var(--brand-shadow); }
+
+.selection-option { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.55rem 0.65rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid transparent; transition: background 0.15s ease, border-color 0.15s ease; }
+.selection-option:hover        { background: var(--brand-muted); border-color: var(--brand-glow); }
+.selection-option--active      { background: var(--brand-light); border-color: var(--brand-glow); }
+.selection-option__body        { display: flex; flex-direction: column; gap: 0.1rem; }
+.selection-option__label       { font-weight: 600; color: var(--ink); font-size: var(--text-sm); }
+.selection-option__meta        { font-size: var(--text-xs); color: var(--ink-muted); }
+
+/* ── Empty State ──────────────────────────────────────────── */
+.empty-state { text-align: center; color: var(--ink-muted); padding: 1.5rem; font-size: var(--text-sm); }

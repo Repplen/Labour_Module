@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import webLogo from "../assets/Web-logo.png";
 import api from "../api/axios";
 import {
   buildBrowserNotificationBody,
@@ -1288,12 +1289,27 @@ export default function Navbar() {
   return (
     <nav
       ref={navbarRef}
-      className="navbar navbar-expand-lg navbar-dark px-3 px-lg-4 app-navbar"
+      className="navbar navbar-expand-lg navbar-light px-3 px-lg-4 app-navbar"
       data-testid="app-navbar"
     >
+      {/* SVG filter: makes white pixels transparent, all other colors unchanged */}
+      <svg style={{ display: "none" }} aria-hidden="true">
+        <defs>
+          <filter id="logo-remove-white">
+            <feColorMatrix
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 3 0"
+            />
+          </filter>
+        </defs>
+      </svg>
       <div className="app-navbar__toprow">
-        <NavLink className="navbar-brand fw-semibold" to={homePath}>
-          Check List Workspace
+        <NavLink className="navbar-brand fw-semibold d-inline-flex align-items-center gap-2" to={homePath}>
+          <img
+            src={webLogo}
+            alt="Check List Workspace"
+            style={{ height: "38px", width: "auto", flexShrink: 0, objectFit: "contain" }}
+          />
         </NavLink>
 
         <div className="app-navbar__top-controls">
