@@ -80,6 +80,8 @@ export const useDepartmentMaster = () => {
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
   const [serverNameError, setServerNameError] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
   const [selectedDepartmentName, setSelectedDepartmentName] = useState("");
@@ -136,9 +138,16 @@ export const useDepartmentMaster = () => {
     [employeeOptions]
   );
 
+  const shouldShowNameRequired = nameTouched || submitAttempted;
   const clientNameError = useMemo(
-    () => getDepartmentNameError({ name, departments, editingId }),
-    [departments, editingId, name]
+    () =>
+      getDepartmentNameError({
+        name,
+        departments,
+        editingId,
+        shouldShowRequired: shouldShowNameRequired,
+      }),
+    [departments, editingId, name, shouldShowNameRequired]
   );
   const nameError = clientNameError || serverNameError;
   const hasNameError = Boolean(nameError);
@@ -156,6 +165,8 @@ export const useDepartmentMaster = () => {
     setLegacyDepartmentLeadNames([]);
     setEditingId("");
     setServerNameError("");
+    setNameTouched(false);
+    setSubmitAttempted(false);
   };
 
   const resetSubDepartmentForm = () => {
@@ -175,6 +186,9 @@ export const useDepartmentMaster = () => {
 
   const saveDepartment = async () => {
     const trimmedName = name.trim();
+
+    setSubmitAttempted(true);
+
     if (!trimmedName || hasNameError) return;
 
     setLoading(true);
@@ -229,6 +243,8 @@ export const useDepartmentMaster = () => {
     setLegacyDepartmentLeadNames(legacyDepartmentLeadLabels);
     setEditingId(row._id);
     setServerNameError("");
+    setNameTouched(false);
+    setSubmitAttempted(false);
   };
 
   const deleteDepartment = async (id) => {
@@ -353,7 +369,10 @@ export const useDepartmentMaster = () => {
   return {
     departmentForm: {
       name,
-      setName,
+      setName: (value) => {
+        setName(value);
+        setNameTouched(true);
+      },
       nameError,
       hasNameError,
       loading,

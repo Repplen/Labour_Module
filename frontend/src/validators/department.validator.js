@@ -1,6 +1,7 @@
 import { getApiFieldError, validateMasterName } from "../utils/masterNameValidation";
 
 export const duplicateDepartmentMessage = "This department name already exists.";
+export const departmentRequiredMessage = "Department name is required.";
 
 export const parseNames = (value) => {
   const seen = new Set();
@@ -19,7 +20,16 @@ export const parseNames = (value) => {
 export const normalizeMasterNameForCompare = (value) =>
   String(value || "").trim().toLowerCase();
 
-export const getDepartmentNameError = ({ name, departments, editingId }) => {
+export const getDepartmentNameError = ({
+  name,
+  departments,
+  editingId,
+  shouldShowRequired = false,
+}) => {
+  if (!String(name || "").trim()) {
+    return shouldShowRequired ? departmentRequiredMessage : "";
+  }
+
   const validationMessage = validateMasterName(name, "Department");
   if (validationMessage) return validationMessage;
 
