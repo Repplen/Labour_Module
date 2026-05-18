@@ -35,13 +35,13 @@ export default function SubDepartmentManager({
 
       <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
         <span className="fw-semibold">Path:</span>
-        <button className="btn btn-sm btn-outline-secondary" onClick={() => jumpToSubLevel(-1)}>
+        <button className="btn btn-sm btn-soft-secondary" onClick={() => jumpToSubLevel(-1)}>
           Sub Department Master 1
         </button>
         {subPath.map((item, index) => (
           <button
             key={item._id}
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-soft-secondary"
             onClick={() => jumpToSubLevel(index)}
           >
             {item.name}
@@ -87,7 +87,7 @@ export default function SubDepartmentManager({
               </span>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-warning"
+                className="btn btn-sm btn-soft-warning"
                 onClick={() => setLegacySubHeadNames([])}
               >
                 Clear Legacy
@@ -98,18 +98,19 @@ export default function SubDepartmentManager({
 
         <div className="d-flex flex-wrap gap-2">
           <button
-            className="btn btn-success"
+            type="button"
+            className="btn btn-sm btn-soft-success"
             onClick={saveSubDepartment}
             disabled={subLoading || Boolean(subNameError)}
           >
             {subLoading ? "Saving..." : subEditingId ? "Update" : "Add"}
           </button>
           {subEditingId && (
-            <button className="btn btn-secondary" onClick={resetSubDepartmentForm}>
+            <button type="button" className="btn btn-sm btn-soft-secondary" onClick={resetSubDepartmentForm}>
               Cancel
             </button>
           )}
-          <button className="btn btn-outline-secondary" onClick={clearSubDepartmentContext}>
+          <button type="button" className="btn btn-sm btn-soft-secondary" onClick={clearSubDepartmentContext}>
             Close
           </button>
         </div>
@@ -119,10 +120,10 @@ export default function SubDepartmentManager({
         <table className="table table-bordered mb-0">
           <thead>
             <tr>
-              <th>#</th>
+              <th>Sl.No</th>
               <th>Sub Department Master {currentSubLevel}</th>
               <th>Sub Department Heads</th>
-              <th width="250">Actions</th>
+              <th style={{ width: "1%", whiteSpace: "nowrap" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -139,27 +140,36 @@ export default function SubDepartmentManager({
                 <td>{index + 1}</td>
                 <td>{sub.name}</td>
                 <td>{sub.headNames?.length ? sub.headNames.join(", ") : "-"}</td>
-                <td>
-                  <div className="d-flex flex-wrap gap-2">
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <div className="d-flex gap-2">
                     {currentSubLevel < 4 && (
                       <button
-                        className="btn btn-sm btn-primary"
+                        type="button"
+                        className="btn btn-sm btn-soft-primary btn-icon-responsive"
                         onClick={() => openNextSubLevel(sub)}
+                        title="Next Level"
                       >
-                        Next Level
+                        <i className="bi bi-chevron-double-right btn-icon" />
+                        <span className="btn-label">Next Level</span>
                       </button>
                     )}
                     <button
-                      className="btn btn-sm btn-warning"
+                      type="button"
+                      className="btn btn-sm btn-soft-warning btn-icon-responsive"
                       onClick={() => editSubDepartment(sub)}
+                      title="Edit"
                     >
-                      Edit
+                      <i className="bi bi-pencil btn-icon" />
+                      <span className="btn-label">Edit</span>
                     </button>
                     <button
-                      className="btn btn-sm btn-danger"
+                      type="button"
+                      className="btn btn-sm btn-soft-danger btn-icon-responsive"
                       onClick={() => deleteSubDepartment(sub._id, sub.name)}
+                      title="Delete"
                     >
-                      Delete
+                      <i className="bi bi-trash btn-icon" />
+                      <span className="btn-label">Delete</span>
                     </button>
                   </div>
                 </td>

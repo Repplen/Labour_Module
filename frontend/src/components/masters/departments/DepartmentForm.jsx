@@ -67,7 +67,7 @@ export default function DepartmentForm({
           <span>Legacy department heads preserved: {legacyHeadNames.join(", ")}</span>
           <button
             type="button"
-            className="btn btn-sm btn-outline-warning"
+            className="btn btn-sm btn-soft-warning"
             onClick={() => setLegacyHeadNames([])}
           >
             Clear Legacy
@@ -82,7 +82,7 @@ export default function DepartmentForm({
           </span>
           <button
             type="button"
-            className="btn btn-sm btn-outline-warning"
+            className="btn btn-sm btn-soft-warning"
             onClick={() => setLegacyDepartmentLeadNames([])}
           >
             Clear Legacy
@@ -90,16 +90,18 @@ export default function DepartmentForm({
         </div>
       )}
 
-      <div className="d-flex gap-2">
+      <div className="d-flex gap-2 flex-wrap">
         <button
-          className="btn btn-success"
+          type="button"
+          className={`btn btn-primary btn-create${loading ? " btn-create--saving" : ""}`}
           onClick={saveDepartment}
           disabled={loading || hasNameError}
         >
           {loading ? "Saving..." : editingId ? "Update Department" : "Save Department"}
         </button>
         {editingId && (
-          <button className="btn btn-secondary" onClick={resetDepartmentForm}>
+          <button type="button" className="btn btn-outline-secondary" onClick={resetDepartmentForm}>
+            <i className="bi bi-arrow-counterclockwise me-1" />
             Cancel
           </button>
         )}

@@ -5,9 +5,9 @@ export default function DesignationTable({ designations, editDesignation, setDel
         <table className="table table-bordered table-hover align-middle mb-0">
           <thead>
             <tr>
-              <th>#</th>
+              <th>Sl.No</th>
               <th>Designation</th>
-              <th width="170">Actions</th>
+              <th style={{ width: "1%", whiteSpace: "nowrap" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -22,24 +22,25 @@ export default function DesignationTable({ designations, editDesignation, setDel
                 <tr key={designation._id}>
                   <td>{index + 1}</td>
                   <td>{designation.name}</td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <div className="d-flex gap-2">
                       <button
-                        className="btn btn-sm btn-warning"
+                        type="button"
+                        className="btn btn-sm btn-soft-warning btn-icon-responsive"
                         onClick={() => editDesignation(designation)}
+                        title="Edit"
                       >
-                        Edit
+                        <i className="bi bi-pencil btn-icon" />
+                        <span className="btn-label">Edit</span>
                       </button>
                       <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() =>
-                          setDeleteTarget({
-                            id: designation._id,
-                            name: designation.name,
-                          })
-                        }
+                        type="button"
+                        className="btn btn-sm btn-soft-danger btn-icon-responsive"
+                        onClick={() => setDeleteTarget({ id: designation._id, name: designation.name })}
+                        title="Delete"
                       >
-                        Delete
+                        <i className="bi bi-trash btn-icon" />
+                        <span className="btn-label">Delete</span>
                       </button>
                     </div>
                   </td>

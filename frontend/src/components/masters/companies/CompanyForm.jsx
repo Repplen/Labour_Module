@@ -55,7 +55,7 @@ export default function CompanyForm({
           <span>Legacy company directors preserved: {legacyDirectorNames.join(", ")}</span>
           <button
             type="button"
-            className="btn btn-sm btn-outline-warning"
+            className="btn btn-sm btn-soft-warning"
             onClick={() => setLegacyDirectorNames([])}
           >
             Clear Legacy
@@ -63,16 +63,18 @@ export default function CompanyForm({
         </div>
       )}
 
-      <div className="d-flex gap-2 mt-3">
+      <div className="d-flex gap-2 flex-wrap mt-3">
         <button
-          className="btn btn-success"
+          type="button"
+          className={`btn btn-primary btn-create${loading ? " btn-create--saving" : ""}`}
           onClick={saveCompany}
           disabled={loading || Boolean(hasBlockingNameError)}
         >
           {loading ? "Saving..." : editingId ? "Update Company" : "Save Company"}
         </button>
         {editingId && (
-          <button className="btn btn-outline-secondary" onClick={resetForm}>
+          <button type="button" className="btn btn-outline-secondary" onClick={resetForm}>
+            <i className="bi bi-arrow-counterclockwise me-1" />
             Cancel
           </button>
         )}

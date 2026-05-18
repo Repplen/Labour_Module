@@ -10,12 +10,12 @@ export default function DepartmentTable({
         <table className="table table-bordered mb-0">
           <thead>
             <tr>
-              <th>#</th>
+              <th>Sl.No</th>
               <th>Department</th>
               <th>Department Heads</th>
               <th>Department Leads</th>
               <th>Sub Departments</th>
-              <th width="290">Actions</th>
+              <th style={{ width: "1%", whiteSpace: "nowrap" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -40,25 +40,34 @@ export default function DepartmentTable({
                         .join(", ")
                     : "-"}
                 </td>
-                <td>
-                  <div className="d-flex flex-wrap gap-2">
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <div className="d-flex gap-2">
                     <button
-                      className="btn btn-sm btn-primary"
+                      type="button"
+                      className="btn btn-sm btn-soft-primary btn-icon-responsive"
                       onClick={() => openSubDepartmentManager(department)}
+                      title="Manage Sub Departments"
                     >
-                      Manage Sub
+                      <i className="bi bi-diagram-3 btn-icon" />
+                      <span className="btn-label">Manage Sub</span>
                     </button>
                     <button
-                      className="btn btn-sm btn-warning"
+                      type="button"
+                      className="btn btn-sm btn-soft-warning btn-icon-responsive"
                       onClick={() => editDepartment(department)}
+                      title="Edit"
                     >
-                      Edit
+                      <i className="bi bi-pencil btn-icon" />
+                      <span className="btn-label">Edit</span>
                     </button>
                     <button
-                      className="btn btn-sm btn-danger"
+                      type="button"
+                      className="btn btn-sm btn-soft-danger btn-icon-responsive"
                       onClick={() => deleteDepartment(department._id, department.name)}
+                      title="Delete"
                     >
-                      Delete
+                      <i className="bi bi-trash btn-icon" />
+                      <span className="btn-label">Delete</span>
                     </button>
                   </div>
                 </td>

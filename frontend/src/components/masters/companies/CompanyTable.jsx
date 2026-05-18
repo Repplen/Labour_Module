@@ -5,10 +5,10 @@ export default function CompanyTable({ companies, editRow, setDeleteTarget }) {
         <table className="table table-bordered table-hover align-middle">
           <thead className="table-light">
             <tr>
-              <th>#</th>
+              <th>Sl.No</th>
               <th>Company</th>
               <th>Company Directors</th>
-              <th width="170">Actions</th>
+              <th style={{ width: "1%", whiteSpace: "nowrap" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -28,21 +28,27 @@ export default function CompanyTable({ companies, editRow, setDeleteTarget }) {
                       ? company.directorNames.join(", ")
                       : "-"}
                   </td>
-                  <td>
-                    <button
-                      className="btn btn-sm btn-warning me-2"
-                      onClick={() => editRow(company)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={() =>
-                        setDeleteTarget({ id: company._id, name: company.name })
-                      }
-                    >
-                      Delete
-                    </button>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-soft-warning btn-icon-responsive"
+                        onClick={() => editRow(company)}
+                        title="Edit"
+                      >
+                        <i className="bi bi-pencil btn-icon" />
+                        <span className="btn-label">Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-soft-danger btn-icon-responsive"
+                        onClick={() => setDeleteTarget({ id: company._id, name: company.name })}
+                        title="Delete"
+                      >
+                        <i className="bi bi-trash btn-icon" />
+                        <span className="btn-label">Delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

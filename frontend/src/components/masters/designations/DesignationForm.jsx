@@ -31,16 +31,18 @@ export default function DesignationForm({
         </div>
       </div>
 
-      <div className="d-flex gap-2 mt-3">
+      <div className="d-flex gap-2 flex-wrap mt-3">
         <button
-          className="btn btn-success"
+          type="button"
+          className={`btn btn-primary btn-create${loading ? " btn-create--saving" : ""}`}
           onClick={saveDesignation}
           disabled={loading || Boolean(liveNameError)}
         >
           {loading ? "Saving..." : editingId ? "Update Designation" : "Save Designation"}
         </button>
         {editingId && (
-          <button className="btn btn-outline-secondary" onClick={resetForm}>
+          <button type="button" className="btn btn-outline-secondary" onClick={resetForm}>
+            <i className="bi bi-arrow-counterclockwise me-1" />
             Cancel
           </button>
         )}

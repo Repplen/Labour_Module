@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ChecklistAssistantWidget from "./components/ChecklistAssistantWidget";
+import ScrollToTopButton from "./components/ScrollToTopButton";
 import { ModuleSettingsProvider } from "./context/ModuleSettingsContext";
 import { PermissionProvider } from "./context/PermissionContext";
 import { useModuleSettings } from "./context/useModuleSettings";
@@ -197,6 +198,7 @@ function AppRoutes() {
     <div className={`app-layout${hideNavbar ? " app-layout--auth" : ""}`}>
       {!hideNavbar ? <Navbar /> : null}
       {!hideNavbar && hasSession() && !loading ? <ChecklistAssistantWidget /> : null}
+      {!hideNavbar && hasSession() ? <ScrollToTopButton /> : null}
 
       <main className="app-layout__content">
         <Routes>
