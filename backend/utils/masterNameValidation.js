@@ -1,17 +1,21 @@
 // ─────────────────────────────────────────────────────────────
 // backend/utils/masterNameValidation.js
 // Used by: companyRoutes, departmentRoutes, designationRoutes
-// All business rules: allow letters, numbers, special chars
-// Only rule: must contain at least one letter or number
+// Company names use a stricter business-name standard.
+// Generic master names keep the older shared master-name rules.
 // ─────────────────────────────────────────────────────────────
 
 const normalizeMasterName = (value) =>
   String(value || "").trim().replace(/\s+/g, " ");
 
+const allowedCompanyNameRegex = /^[A-Za-z0-9 .&()/_-]+$/;
+const repeatedCompanySeparatorRegex = /([.&()/_-])\1/;
+
 /**
  * Validates company name.
- * Allows: letters, numbers, spaces, special chars (& . , - ' etc.)
- * Rejects: only special chars with no letter or number
+ * Allows: letters, numbers, spaces, and common business separators: . & - _ / ( )
+ * Rejects: only numbers, names starting with separators, dangerous characters,
+ * and repeated separators like --, .., &&, __, //, ((, or )).
  */
 const validateCompanyName = (value) => {
   const name = normalizeMasterName(value);
@@ -25,8 +29,17 @@ const validateCompanyName = (value) => {
   if (name.length > 100)
     return { name, error: "Company name must not exceed 100 characters." };
 
-  if (!/[a-zA-Z0-9]/.test(name))
-    return { name, error: "Company name must contain at least one letter or number." };
+  if (!/[a-zA-Z]/.test(name))
+    return { name, error: "Company name must contain at least one alphabet." };
+
+  if (!/^[A-Za-z0-9]/.test(name))
+    return { name, error: "Company name must start with a letter or number." };
+
+  if (!allowedCompanyNameRegex.test(name))
+    return { name, error: "Company name contains invalid characters." };
+
+  if (repeatedCompanySeparatorRegex.test(name))
+    return { name, error: "Company name must not contain repeated separators." };
 
   return { name, error: "" };
 };

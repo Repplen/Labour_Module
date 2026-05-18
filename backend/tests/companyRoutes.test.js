@@ -189,7 +189,7 @@ describe("POST /companies", () => {
       .send({ name: "###" });
 
     expect(res.status).toBe(400);
-    expect(res.body.errors[0].message).toMatch(/letter or number/i);
+    expect(res.body.errors[0].message).toMatch(/alphabet/i);
   });
 
   test("returns 409 for duplicate company name", async () => {

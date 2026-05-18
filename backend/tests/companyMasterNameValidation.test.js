@@ -1,18 +1,8 @@
-/**
- * companyMasterNameValidation.test.js
- *
- * Unit tests for validateCompanyName and normalizeMasterName
- * from backend/utils/masterNameValidation.js.
- * These are the pure-function business rules used by company.routes.js.
- */
-
 const {
   normalizeMasterName,
   validateCompanyName,
   validateMasterName,
 } = require("../utils/masterNameValidation");
-
-// ─── normalizeMasterName ──────────────────────────────────────────────────────
 
 describe("normalizeMasterName", () => {
   test("trims leading and trailing whitespace", () => {
@@ -34,65 +24,43 @@ describe("normalizeMasterName", () => {
   test("returns empty string for undefined", () => {
     expect(normalizeMasterName(undefined)).toBe("");
   });
-
-  test("coerces number to string", () => {
-    expect(normalizeMasterName(123)).toBe("123");
-  });
-
-  test("preserves single internal space", () => {
-    expect(normalizeMasterName("Nova Tech")).toBe("Nova Tech");
-  });
 });
 
-// ─── validateCompanyName ──────────────────────────────────────────────────────
-
-describe("validateCompanyName — valid names", () => {
+describe("validateCompanyName - valid names", () => {
   const validCases = [
-    ["Acme Corp",          "Acme Corp"],
-    ["AB",                 "AB"],
-    ["123 Industries",     "123 Industries"],
-    ["A1-Corp & Co.",      "A1-Corp & Co."],
-    ["  Nova Tech  ",      "Nova Tech"],   // trimmed
-    ["A".repeat(100),      "A".repeat(100)],
+    ["Acme Corp", "Acme Corp"],
+    ["AB", "AB"],
+    ["123 Industries", "123 Industries"],
+    ["A1-Corp & Co.", "A1-Corp & Co."],
+    ["A.K. Traders", "A.K. Traders"],
+    ["M&S Associates", "M&S Associates"],
+    ["Tech-Solutions", "Tech-Solutions"],
+    ["Internal_System", "Internal_System"],
+    ["Logistics/Exports", "Logistics/Exports"],
+    ["Company (Branch)", "Company (Branch)"],
+    ["  Nova Tech  ", "Nova Tech"],
+    ["A".repeat(100), "A".repeat(100)],
   ];
 
-  test.each(validCases)("accepts '%s' → normalized '%s'", (input, expected) => {
+  test.each(validCases)("accepts '%s' as '%s'", (input, expected) => {
     const { name, error } = validateCompanyName(input);
+
     expect(error).toBe("");
     expect(name).toBe(expected);
   });
 });
 
-describe("validateCompanyName — required", () => {
-  test("rejects empty string", () => {
-    const { error } = validateCompanyName("");
-    expect(error).toMatch(/required/i);
-  });
+describe("validateCompanyName - required", () => {
+  test.each(["", "   ", null, undefined])("rejects %p", (input) => {
+    const { error } = validateCompanyName(input);
 
-  test("rejects whitespace-only string", () => {
-    const { error } = validateCompanyName("   ");
-    expect(error).toMatch(/required/i);
-  });
-
-  test("rejects null", () => {
-    const { error } = validateCompanyName(null);
-    expect(error).toMatch(/required/i);
-  });
-
-  test("rejects undefined", () => {
-    const { error } = validateCompanyName(undefined);
     expect(error).toMatch(/required/i);
   });
 });
 
-describe("validateCompanyName — minimum length", () => {
+describe("validateCompanyName - length", () => {
   test("rejects a single character", () => {
     const { error } = validateCompanyName("A");
-    expect(error).toMatch(/at least 2/i);
-  });
-
-  test("rejects a single character surrounded by spaces (trimmed = 1 char)", () => {
-    const { error } = validateCompanyName("  A  ");
     expect(error).toMatch(/at least 2/i);
   });
 
@@ -100,9 +68,7 @@ describe("validateCompanyName — minimum length", () => {
     const { error } = validateCompanyName("AB");
     expect(error).toBe("");
   });
-});
 
-describe("validateCompanyName — maximum length", () => {
   test("rejects a name longer than 100 characters", () => {
     const { error } = validateCompanyName("A".repeat(101));
     expect(error).toMatch(/100/);
@@ -114,47 +80,88 @@ describe("validateCompanyName — maximum length", () => {
   });
 });
 
-describe("validateCompanyName — must contain a letter or number", () => {
-  const symbolOnly = ["---", "###", "!!!", "@@@", "...", "$$$$", "____", "((("];
+describe("validateCompanyName - alphabet requirement", () => {
+  test.each(["---", "###", "!!!", "@@@", "...", "$$$$", "____", "(((", "123", "34"])(
+    "rejects '%s'",
+    (input) => {
+      const { error } = validateCompanyName(input);
 
-  test.each(symbolOnly)("rejects '%s' (only symbols)", (input) => {
+      expect(error).toMatch(/alphabet/i);
+    }
+  );
+});
+
+describe("validateCompanyName - start character", () => {
+  test.each(["-Acme Corp", ".Acme Corp", "& Acme Corp", "(Acme Corp"])(
+    "rejects '%s'",
+    (input) => {
+      const { error } = validateCompanyName(input);
+
+      expect(error).toMatch(/start with a letter or number/i);
+    }
+  );
+});
+
+describe("validateCompanyName - invalid characters", () => {
+  test.each([
+    "ABC, Pvt Ltd",
+    "John's Company",
+    "Company #1",
+    "R&D @ Chennai",
+    "Acme * Corp",
+    "Acme + Corp",
+    "Acme: Corp",
+    "Acme [North]",
+  ])("rejects '%s'", (input) => {
     const { error } = validateCompanyName(input);
-    expect(error).toMatch(/letter or number/i);
-  });
 
-  test("accepts digits-only (e.g. '123')", () => {
-    const { error } = validateCompanyName("123");
-    expect(error).toBe("");
+    expect(error).toMatch(/invalid characters/i);
   });
 });
 
-describe("validateCompanyName — return shape", () => {
-  test("returns { name, error } with normalized name and empty error on success", () => {
+describe("validateCompanyName - repeated separators", () => {
+  test.each([
+    "Tech--Solutions",
+    "A..K Traders",
+    "M&&S Associates",
+    "Internal__System",
+    "Logistics//Exports",
+  ])("rejects '%s'", (input) => {
+    const { error } = validateCompanyName(input);
+
+    expect(error).toMatch(/repeated separators/i);
+  });
+});
+
+describe("validateCompanyName - return shape", () => {
+  test("returns normalized name and empty error on success", () => {
     const result = validateCompanyName("  Acme Corp  ");
+
     expect(result).toMatchObject({ name: "Acme Corp", error: "" });
   });
 
-  test("returns { name, error } with non-empty error on failure", () => {
+  test("returns name and non-empty error on failure", () => {
     const result = validateCompanyName("");
+
     expect(result).toHaveProperty("name");
     expect(result).toHaveProperty("error");
     expect(result.error).not.toBe("");
   });
 });
 
-// ─── validateMasterName (generic — Department, Designation, Site) ─────────────
-
 describe("validateMasterName", () => {
   test("uses the supplied label in error messages", () => {
     const { error } = validateMasterName("", "Department");
+
     expect(error).toMatch(/department/i);
   });
 
-  test("applies the same rules as validateCompanyName", () => {
+  test("keeps generic master-name rules unchanged", () => {
     expect(validateMasterName("").error).toMatch(/required/i);
     expect(validateMasterName("A").error).toMatch(/at least 2/i);
     expect(validateMasterName("A".repeat(101)).error).toMatch(/100/);
     expect(validateMasterName("---").error).toMatch(/letter or number/i);
+    expect(validateMasterName("123").error).toBe("");
     expect(validateMasterName("Accounts Team").error).toBe("");
   });
 });

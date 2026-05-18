@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { validateCompanyName } = require("../utils/masterNameValidation");
 
 const companySchema = new mongoose.Schema(
   {
@@ -10,8 +11,8 @@ const companySchema = new mongoose.Schema(
       minlength: [2, "Company name must be at least 2 characters."],
       maxlength: [100, "Company name must not exceed 100 characters."],
       validate: {
-        validator: (value) => /[a-zA-Z0-9]/.test(value),
-        message: "Company name must contain at least one letter or number.",
+        validator: (value) => !validateCompanyName(value).error,
+        message: (props) => validateCompanyName(props.value).error,
       },
     },
     directorNames: {

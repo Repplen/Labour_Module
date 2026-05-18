@@ -11,6 +11,9 @@
 export const normalizeMasterName = (value) =>
   String(value || "").trim().replace(/\s+/g, " ");
 
+const allowedCompanyNameRegex = /^[A-Za-z0-9 .&()/_-]+$/;
+const repeatedCompanySeparatorRegex = /([.&()/_-])\1/;
+
 /**
  * Validates a master name (Designation, Department, Site, etc.).
  * Returns an error string, or "" if valid.
@@ -29,7 +32,26 @@ export const validateMasterName = (value, label = "Name") => {
  * Validates a company name (same rules, different label).
  * Returns an error string, or "" if valid.
  */
-export const validateCompanyName = (value) => validateMasterName(value, "Company");
+export const validateCompanyName = (value) => {
+  const name = normalizeMasterName(value);
+  if (!name) return "Company name is required.";
+  if (name.length < 2) return "Company name must be at least 2 characters.";
+  if (name.length > 100) return "Company name must not exceed 100 characters.";
+  if (!/[a-zA-Z]/.test(name)) {
+    return "Company name must contain at least one alphabet.";
+  }
+  if (!/^[A-Za-z0-9]/.test(name)) {
+    return "Company name must start with a letter or number.";
+  }
+  if (!allowedCompanyNameRegex.test(name)) {
+    return "Company name contains invalid characters.";
+  }
+  if (repeatedCompanySeparatorRegex.test(name)) {
+    return "Company name must not contain repeated separators.";
+  }
+
+  return "";
+};
 
 /**
  * Extracts the first error message from a backend API error response.
