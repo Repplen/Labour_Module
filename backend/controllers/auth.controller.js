@@ -138,7 +138,6 @@ exports.login = async (req, res) => {
       isActive: true,
       $or: [
         { employeeCode: { $regex: `^${escapeRegex(loginId)}$`, $options: "i" } },
-        { employeeName: { $regex: `^${escapeRegex(loginId)}$`, $options: "i" } },
         { email: { $regex: `^${escapeRegex(loginId)}$`, $options: "i" } },
       ],
     }).select("+password");

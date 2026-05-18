@@ -143,6 +143,36 @@ describe("auth.controller login", () => {
     expect(User.findOne).not.toHaveBeenCalled();
   });
 
+  test("does not use employee name as an employee login identifier", async () => {
+    User.findOne.mockReturnValue({
+      populate: jest.fn().mockResolvedValue(null),
+    });
+    Employee.findOne.mockReturnValue({
+      select: jest.fn().mockResolvedValue(null),
+    });
+
+    const response = createMockResponse();
+
+    await login(
+      {
+        body: {
+          loginId: "Asha Kumar",
+          password: "secret123",
+        },
+      },
+      response
+    );
+
+    expect(Employee.findOne).toHaveBeenCalledWith({
+      isActive: true,
+      $or: [
+        { employeeCode: { $regex: "^Asha Kumar$", $options: "i" } },
+        { email: { $regex: "^Asha Kumar$", $options: "i" } },
+      ],
+    });
+    expect(response.status).toHaveBeenCalledWith(401);
+  });
+
   test("lists only active admin panel users", async () => {
     const rows = [
       {

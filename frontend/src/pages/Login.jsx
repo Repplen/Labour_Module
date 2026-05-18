@@ -153,7 +153,7 @@ export default function Login() {
                     data-testid="login-email"
                     type="text"
                     className="form-control login-input"
-                    placeholder="Employee code, name, or email"
+                    placeholder="Employee code or email"
                     value={loginId}
                     onChange={(e) => setLoginId(e.target.value)}
                     required
@@ -203,7 +203,7 @@ export default function Login() {
               <div className="form-help text-center mt-3" aria-live="polite">
                 {loading
                   ? "Checking your credentials…"
-                  : "Use your employee code, name, or email to sign in."}
+                  : "Use your employee code or email to sign in."}
               </div>
             </form>
           </div>

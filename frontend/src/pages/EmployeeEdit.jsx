@@ -600,7 +600,7 @@ export default function EmployeeEdit() {
                 placeholder="Leave blank to keep the current password"
               />
               <div className="form-help mb-3">
-                Employees can continue using employee code, employee name, or email to sign in.
+                Employees can continue using employee code or email to sign in.
               </div>
 
               <div className="row g-3 mb-3">

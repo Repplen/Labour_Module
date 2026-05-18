@@ -533,8 +533,7 @@ export default function EmployeeForm() {
                 required
               />
               <div className="form-help mb-3">
-                Employees can sign in using employee code, employee name, or email with this
-                password.
+                Employees can sign in using employee code or email with this password.
               </div>
 
               <label className="form-label fw-semibold">Profile Photo</label>
