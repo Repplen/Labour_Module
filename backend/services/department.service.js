@@ -16,6 +16,7 @@ const {
 const findDuplicateDepartment = (name, currentDepartmentId = null) => {
   const filter = {
     name: { $regex: new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i") },
+    isActive: { $ne: false },
   };
 
   if (currentDepartmentId) {
@@ -118,6 +119,20 @@ const listDepartmentsService = async (access) =>
 
 const createDepartmentService = async (body, validatedDepartment) => {
   const data = await buildDepartmentPayload(body, validatedDepartment);
+
+  const softDeleted = await Department.findOne({
+    name: { $regex: new RegExp(`^\\s*${escapeRegExp(data.name)}\\s*$`, "i") },
+    isActive: false,
+  });
+
+  if (softDeleted) {
+    softDeleted.name = data.name;
+    softDeleted.headNames = data.headNames;
+    softDeleted.departmentLeadNames = data.departmentLeadNames;
+    softDeleted.isActive = true;
+    return softDeleted.save();
+  }
+
   return Department.create(data);
 };
 

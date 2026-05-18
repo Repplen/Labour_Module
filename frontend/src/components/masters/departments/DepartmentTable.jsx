@@ -56,7 +56,7 @@ export default function DepartmentTable({
                     </button>
                     <button
                       className="btn btn-sm btn-danger"
-                      onClick={() => deleteDepartment(department._id)}
+                      onClick={() => deleteDepartment(department._id, department.name)}
                     >
                       Delete
                     </button>

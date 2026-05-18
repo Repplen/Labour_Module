@@ -1,6 +1,7 @@
 import SearchableCheckboxSelector from "../../SearchableCheckboxSelector";
 
 export default function SubDepartmentManager({
+  subManagerRef,
   selectedDepartmentId,
   selectedDepartmentName,
   subPath,
@@ -27,7 +28,7 @@ export default function SubDepartmentManager({
   if (!selectedDepartmentId) return null;
 
   return (
-    <div className="soft-card mb-4">
+    <div ref={subManagerRef} className="soft-card mb-4">
       <h5 className="mb-3">
         Sub Department Master {currentSubLevel} - {selectedDepartmentName}
       </h5>
@@ -156,7 +157,7 @@ export default function SubDepartmentManager({
                     </button>
                     <button
                       className="btn btn-sm btn-danger"
-                      onClick={() => deleteSubDepartment(sub._id)}
+                      onClick={() => deleteSubDepartment(sub._id, sub.name)}
                     >
                       Delete
                     </button>

@@ -1,6 +1,7 @@
 import SearchableCheckboxSelector from "../../SearchableCheckboxSelector";
 
 export default function DepartmentForm({
+  formRef,
   name,
   setName,
   nameError,
@@ -21,7 +22,7 @@ export default function DepartmentForm({
   clearServerNameError,
 }) {
   return (
-    <div className="soft-card mb-4">
+    <div ref={formRef} className="soft-card mb-4">
       <input
         className={`form-control${nameError ? " is-invalid" : " mb-2"}`}
         placeholder="Department Name"

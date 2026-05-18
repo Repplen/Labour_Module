@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDepartment,
   createSubDepartment,
@@ -10,6 +10,7 @@ import {
   updateSubDepartment,
 } from "../../services/department.service";
 import { getEmployees } from "../../services/employee.service";
+import { showToast } from "../../utils/toastUtils";
 import {
   getApiNameDuplicateError,
   getDepartmentApiFieldError,
@@ -82,6 +83,13 @@ export const useDepartmentMaster = () => {
   const [serverNameError, setServerNameError] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const formRef = useRef(null);
+  const subManagerRef = useRef(null);
+  const fetchVersionRef = useRef(0);
 
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
   const [selectedDepartmentName, setSelectedDepartmentName] = useState("");
@@ -97,10 +105,13 @@ export const useDepartmentMaster = () => {
   const currentParentId = subPath.length ? subPath[subPath.length - 1]._id : "";
 
   const fetchDepartments = async () => {
+    const version = ++fetchVersionRef.current;
     try {
       const res = await getDepartments();
+      if (version !== fetchVersionRef.current) return;
       setDepartments(res.data || []);
     } catch (err) {
+      if (version !== fetchVersionRef.current) return;
       console.error("Load departments failed:", err);
       setDepartments([]);
     }
@@ -189,7 +200,7 @@ export const useDepartmentMaster = () => {
 
     setSubmitAttempted(true);
 
-    if (!trimmedName || hasNameError) return;
+    if (!trimmedName || clientNameError) return;
 
     setLoading(true);
     setServerNameError("");
@@ -204,8 +215,10 @@ export const useDepartmentMaster = () => {
 
       if (editingId) {
         await updateDepartment(editingId, payload);
+        showToast(setToast, "Department updated successfully!");
       } else {
         await createDepartment(payload);
+        showToast(setToast, "Department added successfully!");
       }
 
       resetDepartmentForm();
@@ -223,7 +236,7 @@ export const useDepartmentMaster = () => {
         return;
       }
 
-      alert(err.response?.data?.message || "Save failed");
+      showToast(setToast, err.response?.data?.message || "Save failed", "error");
     } finally {
       setLoading(false);
     }
@@ -245,18 +258,42 @@ export const useDepartmentMaster = () => {
     setServerNameError("");
     setNameTouched(false);
     setSubmitAttempted(false);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
-  const deleteDepartment = async (id) => {
-    if (!window.confirm("Delete this department?")) return;
+  const deleteDepartment = (id, name) => {
+    setDeleteTarget({ id, name, type: "department" });
+  };
 
+  const deleteSubDepartment = (subId, subName) => {
+    setDeleteTarget({ id: subId, name: subName, type: "sub" });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await deleteDepartmentById(id);
-      if (editingId === id) resetDepartmentForm();
-      if (selectedDepartmentId === id) clearSubDepartmentContext();
-      fetchDepartments();
+      if (deleteTarget.type === "department") {
+        await deleteDepartmentById(deleteTarget.id);
+        if (editingId === deleteTarget.id) resetDepartmentForm();
+        if (selectedDepartmentId === deleteTarget.id) clearSubDepartmentContext();
+        setDepartments((prev) => prev.filter((d) => String(d._id) !== String(deleteTarget.id)));
+        setServerNameError("");
+        fetchDepartments();
+      } else {
+        await deleteSubDepartmentById(selectedDepartmentId, deleteTarget.id);
+        if (subEditingId === deleteTarget.id) resetSubDepartmentForm();
+        await fetchSubDepartments(selectedDepartmentId, currentParentId);
+        fetchDepartments();
+      }
+      showToast(setToast, `"${deleteTarget.name}" deleted successfully!`);
     } catch (err) {
-      alert(err.response?.data?.message || "Delete failed");
+      showToast(setToast, err.response?.data?.message || "Delete failed.", "error");
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -267,7 +304,7 @@ export const useDepartmentMaster = () => {
     } catch (err) {
       console.error("Load sub departments failed:", err);
       setSubDepartments([]);
-      alert(err.response?.data?.message || "Failed to load sub departments");
+      showToast(setToast, err.response?.data?.message || "Failed to load sub departments", "error");
     }
   };
 
@@ -277,6 +314,9 @@ export const useDepartmentMaster = () => {
     setSubPath([]);
     resetSubDepartmentForm();
     await fetchSubDepartments(department._id, "");
+    setTimeout(() => {
+      subManagerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const saveSubDepartment = async () => {
@@ -285,7 +325,8 @@ export const useDepartmentMaster = () => {
     const names = parseNames(subName);
     if (!names.length || subNameError) return;
     if (subEditingId && names.length !== 1) {
-      return alert("While editing, enter only one sub department name");
+      showToast(setToast, "While editing, enter only one sub department name", "warning");
+      return;
     }
 
     setSubLoading(true);
@@ -296,6 +337,7 @@ export const useDepartmentMaster = () => {
           headEmployeeIds: subHeadEmployeeIds,
           headNames: legacySubHeadNames,
         });
+        showToast(setToast, "Sub department updated successfully!");
       } else {
         await createSubDepartment(selectedDepartmentId, {
           parentId: currentParentId || undefined,
@@ -304,13 +346,14 @@ export const useDepartmentMaster = () => {
           headEmployeeIds: subHeadEmployeeIds,
           headNames: legacySubHeadNames,
         });
+        showToast(setToast, "Sub department added successfully!");
       }
 
       resetSubDepartmentForm();
       await fetchSubDepartments(selectedDepartmentId, currentParentId);
       fetchDepartments();
     } catch (err) {
-      alert(err.response?.data?.message || "Save failed");
+      showToast(setToast, err.response?.data?.message || "Save failed", "error");
     } finally {
       setSubLoading(false);
     }
@@ -323,20 +366,6 @@ export const useDepartmentMaster = () => {
     setSubHeadEmployeeIds(selectedEmployeeIds);
     setLegacySubHeadNames(legacyNames);
     setSubEditingId(row._id);
-  };
-
-  const deleteSubDepartment = async (subId) => {
-    if (!selectedDepartmentId) return;
-    if (!window.confirm("Delete this sub department?")) return;
-
-    try {
-      await deleteSubDepartmentById(selectedDepartmentId, subId);
-      if (subEditingId === subId) resetSubDepartmentForm();
-      await fetchSubDepartments(selectedDepartmentId, currentParentId);
-      fetchDepartments();
-    } catch (err) {
-      alert(err.response?.data?.message || "Delete failed");
-    }
   };
 
   const openNextSubLevel = async (subRow) => {
@@ -367,10 +396,22 @@ export const useDepartmentMaster = () => {
   };
 
   return {
+    toastState: {
+      toast,
+      closeToast: () => setToast((t) => ({ ...t, show: false })),
+    },
+    confirmDialog: {
+      deleteTarget,
+      deleteLoading,
+      setDeleteTarget,
+      confirmDelete,
+    },
     departmentForm: {
+      formRef,
       name,
       setName: (value) => {
         setName(value);
+        setServerNameError("");
         setNameTouched(true);
       },
       nameError,
@@ -401,6 +442,7 @@ export const useDepartmentMaster = () => {
       selectedHeadCount: headEmployeeIds.length,
     },
     subDepartmentManager: {
+      subManagerRef,
       selectedDepartmentId,
       selectedDepartmentName,
       subPath,
