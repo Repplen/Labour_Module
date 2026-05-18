@@ -8,6 +8,7 @@ const {
   checklistBulkDeleteSchema,
   checklistCreateSchema,
   checklistDecisionSchema,
+  checklistTaskReportQuerySchema,
   checklistUpdateSchema,
   idParamSchema,
 } = require("../validators/checklist.validator");
@@ -20,8 +21,6 @@ const {
   decideChecklistTask,
   deleteChecklist,
   deleteGeneratedChecklistTask,
-  exportChecklistTaskReportExcel,
-  exportChecklistTaskReportPdf,
   exportChecklistsExcel,
   getChecklistAdminRequestById,
   getChecklistAdminRequests,
@@ -32,8 +31,6 @@ const {
   getChecklistTransferChecklists,
   getChecklistTransferHistory,
   getChecklistTaskById,
-  getChecklistTaskReport,
-  getChecklistTaskReportOptions,
   getChecklists,
   getGeneratedChecklistTasks,
   getMyChecklistTasks,
@@ -47,6 +44,12 @@ const {
   toggleChecklistStatus,
   updateChecklist,
 } = require("../controllers/checklist.controller");
+const {
+  exportChecklistTaskReportExcel,
+  exportChecklistTaskReportPdf,
+  getChecklistTaskReport,
+  getChecklistTaskReportOptions,
+} = require("../controllers/checklistReport.controller");
 
 router.get("/", auth, requirePermission("checklist_master", "view"), getChecklists);
 router.get(
@@ -139,6 +142,7 @@ router.get(
     { moduleKey: "reports", actionKey: "report_view" },
   ]),
   requirePermission("reports", "export"),
+  validateRequest({ query: checklistTaskReportQuerySchema }),
   exportChecklistTaskReportExcel
 );
 router.get(
@@ -149,6 +153,7 @@ router.get(
     { moduleKey: "reports", actionKey: "report_view" },
   ]),
   requirePermission("reports", "export"),
+  validateRequest({ query: checklistTaskReportQuerySchema }),
   exportChecklistTaskReportPdf
 );
 router.get(
@@ -167,6 +172,7 @@ router.get(
     { moduleKey: "reports", actionKey: "view" },
     { moduleKey: "reports", actionKey: "report_view" },
   ]),
+  validateRequest({ query: checklistTaskReportQuerySchema }),
   getChecklistTaskReport
 );
 router.get(
