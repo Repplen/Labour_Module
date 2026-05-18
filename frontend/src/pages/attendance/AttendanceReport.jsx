@@ -4,6 +4,8 @@ import {
   getAttendanceOptions,
   getMonthlyAttendanceReport,
 } from "../../api/attendanceApi";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../hooks/usePagination";
 import { usePermissions } from "../../context/usePermissions";
 import {
   buildAttendanceQueryParams,
@@ -51,6 +53,8 @@ export default function AttendanceReport() {
   });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const pagination = usePagination(report.rows, { initialPageSize: 25 });
+  const { paginatedData } = pagination;
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -419,7 +423,7 @@ export default function AttendanceReport() {
                     </td>
                   </tr>
                 ) : (
-                  report.rows.map((row) => (
+                  paginatedData.map((row) => (
                     <tr key={row.employeeId}>
                       <td>{row.employeeDisplayName}</td>
                       <td>{row.companyName || "-"}</td>
@@ -442,6 +446,7 @@ export default function AttendanceReport() {
               </tbody>
             </table>
           </div>
+          <Pagination {...pagination} />
         </div>
       </div>
     </div>

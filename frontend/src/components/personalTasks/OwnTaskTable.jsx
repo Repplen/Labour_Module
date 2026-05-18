@@ -8,6 +8,8 @@ import {
   getPersonalTaskStatusBadgeClass,
 } from "../../utils/personalTaskDisplay";
 import { getViewerTaskLabel } from "../../utils/personalTaskForm";
+import Pagination from "../Pagination";
+import { usePagination } from "../../hooks/usePagination";
 
 export default function OwnTaskTable({
   completingTaskId,
@@ -19,6 +21,8 @@ export default function OwnTaskTable({
   rows,
   sharingTaskId,
 }) {
+  const pagination = usePagination(rows);
+  const { paginatedData } = pagination;
   return (
     <div className="table-shell own-tasks-table-shell">
       <div className="table-responsive">
@@ -48,7 +52,7 @@ export default function OwnTaskTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row, index) => {
+              paginatedData.map((row, index) => {
                 const isSelected = String(row._id) === String(id || "");
 
                 return (
@@ -160,6 +164,7 @@ export default function OwnTaskTable({
           </tbody>
         </table>
       </div>
+      <Pagination {...pagination} />
     </div>
   );
 }

@@ -220,3 +220,76 @@
   border: 1px solid var(--brand-accent-glow);
   font-size: var(--text-xs); font-weight: 600;
 }
+
+/* ── Pagination Bar ────────────────────────────────────────── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.pagination-bar__info {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  min-width: 12rem;
+}
+
+.pagination-bar__size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-bar__size-label {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  margin-bottom: 0;
+}
+
+.pagination-bar__size-select {
+  width: auto;
+  min-width: 4.5rem;
+}
+
+.pagination {
+  --bs-pagination-color:                var(--brand-accent);
+  --bs-pagination-bg:                   var(--surface);
+  --bs-pagination-border-color:         var(--border);
+  --bs-pagination-hover-color:          var(--brand-accent-deep);
+  --bs-pagination-hover-bg:             var(--brand-accent-muted);
+  --bs-pagination-hover-border-color:   var(--brand-accent);
+  --bs-pagination-focus-color:          var(--brand-accent-deep);
+  --bs-pagination-focus-bg:             var(--brand-accent-muted);
+  --bs-pagination-focus-box-shadow:     0 0 0 0.22rem var(--brand-accent-glow);
+  --bs-pagination-active-color:         #fff;
+  --bs-pagination-active-bg:            var(--brand-accent);
+  --bs-pagination-active-border-color:  var(--brand-accent);
+  --bs-pagination-disabled-color:       var(--ink-ghost);
+  --bs-pagination-disabled-bg:          var(--surface-soft);
+  --bs-pagination-disabled-border-color:var(--border-soft);
+}
+
+.pagination .page-link {
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.65rem;
+  transition: background var(--ease-fast), color var(--ease-fast), border-color var(--ease-fast);
+}
+
+.pagination .page-item.active .page-link {
+  box-shadow: 0 2px 8px var(--brand-accent-glow);
+}
+
+.pagination .page-item.disabled .page-link {
+  color: var(--ink-ghost);
+  background: var(--surface-soft);
+  border-color: var(--border-soft);
+}
+
+.pagination-ellipsis {
+  cursor: default;
+  pointer-events: none;
+}

@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../hooks/usePagination";
 import { usePermissions } from "../../context/usePermissions";
 import {
   formatApprovalLabel,
@@ -776,9 +778,11 @@ function AdminChecklistMasterList({
   canRunScheduler,
   statusMessage,
 }) {
+  const pagination = usePagination(rows, { initialPageSize: 25 });
+  const { paginatedData } = pagination;
   const allRowsSelected =
-    rows.length > 0 &&
-    rows.every((row) => selectedChecklistIds.includes(String(row._id)));
+    paginatedData.length > 0 &&
+    paginatedData.every((row) => selectedChecklistIds.includes(String(row._id)));
   const activeCount = rows.filter((row) => row.status).length;
   const inactiveCount = rows.length - activeCount;
   const hasFilters = Boolean(search.trim() || status || scheduleType || hasColumnFilters);
@@ -1002,7 +1006,7 @@ function AdminChecklistMasterList({
             )}
 
             {!loading &&
-              rows.map((row, index) => (
+              paginatedData.map((row, index) => (
                 <tr key={row._id} className={getPriorityRowClass(row)}>
                   {canDelete ? (
                     <td className="text-center">
@@ -1105,6 +1109,7 @@ function AdminChecklistMasterList({
           </tbody>
         </table>
       </div>
+      <Pagination {...pagination} />
       </div>
     </div>
   );
@@ -1572,6 +1577,8 @@ function EmployeeChecklistTaskList({
     ["submitted", "nil_for_approval"].includes(String(row.status || ""))
   ).length;
   const hasFilters = Boolean(search.trim() || status || scheduleType);
+  const pagination = usePagination(rows, { initialPageSize: 25 });
+  const { paginatedData } = pagination;
 
   return (
     <div className="container-fluid mt-4 mb-5">
@@ -1708,7 +1715,7 @@ function EmployeeChecklistTaskList({
             )}
 
             {!loading &&
-              rows.map((row, index) => {
+              paginatedData.map((row, index) => {
                 return (
                 <tr key={row._id} className={getPriorityRowClass(row)}>
                   <td>{index + 1}</td>
@@ -1768,6 +1775,7 @@ function EmployeeChecklistTaskList({
           </tbody>
         </table>
       </div>
+      <Pagination {...pagination} />
       </div>
     </div>
   );

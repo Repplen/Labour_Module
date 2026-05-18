@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import Pagination from "../../Pagination";
+import { usePagination } from "../../../hooks/usePagination";
 import {
   formatApprovalWorkflowLabel,
   formatChecklistScoreLabel,
@@ -21,7 +23,10 @@ import {
 } from "../../../utils/checklistReportFilters";
 
 export default function ChecklistReportTable({ rows, loading }) {
+  const pagination = usePagination(rows, { initialPageSize: 25 });
+  const { paginatedData } = pagination;
   return (
+    <>
     <div className="table-responsive">
       <table className="table table-bordered table-striped align-middle">
         <thead className="table-dark">
@@ -62,7 +67,7 @@ export default function ChecklistReportTable({ rows, loading }) {
           )}
 
           {!loading &&
-            rows.map((row, index) => {
+            paginatedData.map((row, index) => {
               const currentApproverLabel = formatCurrentApproverLabel(row);
               const approvalWorkflowLabel = formatApprovalWorkflowLabel(row);
               const workflowCount = getApprovalWorkflowEmployees(row).length;
@@ -123,5 +128,7 @@ export default function ChecklistReportTable({ rows, loading }) {
         </tbody>
       </table>
     </div>
+    <Pagination {...pagination} />
+    </>
   );
 }

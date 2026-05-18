@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../hooks/usePagination";
 import { usePermissions } from "../../context/usePermissions";
 import {
   formatPollAssignmentStatusLabel,
@@ -22,6 +24,8 @@ export default function PollList() {
   const canViewAssignedPolls = can("assigned_polls", "view");
 
   const [rows, setRows] = useState([]);
+  const pagination = usePagination(rows);
+  const { paginatedData } = pagination;
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -208,7 +212,7 @@ export default function PollList() {
                   </td>
                 </tr>
               ) : (
-                rows.map((row, index) => (
+                paginatedData.map((row, index) => (
                   <tr key={row._id}>
                     <td>{index + 1}</td>
                     <td>
@@ -319,6 +323,7 @@ export default function PollList() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
     </div>
   );

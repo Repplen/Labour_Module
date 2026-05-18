@@ -2,6 +2,8 @@
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import EmployeeQrCode from "../components/EmployeeQrCode";
+import Pagination from "../components/Pagination";
+import { usePagination } from "../hooks/usePagination";
 import { usePermissions } from "../context/usePermissions";
 import { formatDepartmentList } from "../utils/departmentDisplay";
 import { formatSiteList } from "../utils/siteDisplay";
@@ -326,6 +328,8 @@ export default function EmployeeList() {
     () => filterEmployeesByAdvancedFilters(employees, appliedAdvancedFilters),
     [appliedAdvancedFilters, employees]
   );
+  const pagination = usePagination(filteredEmployees);
+  const { paginatedData } = pagination;
   const advancedFilterOptions = useMemo(
     () => buildEmployeeAdvancedFilterOptions(employees),
     [employees]
@@ -395,7 +399,7 @@ export default function EmployeeList() {
   };
 
   const toggleAllEmployeeSelections = () => {
-    const visibleEmployeeIds = filteredEmployees.map((employee) => String(employee._id));
+    const visibleEmployeeIds = paginatedData.map((employee) => String(employee._id));
 
     if (
       visibleEmployeeIds.length &&
@@ -672,8 +676,8 @@ export default function EmployeeList() {
   };
 
   const allEmployeesSelected =
-    filteredEmployees.length > 0 &&
-    filteredEmployees.every((employee) => selectedEmployeeIds.includes(String(employee._id)));
+    paginatedData.length > 0 &&
+    paginatedData.every((employee) => selectedEmployeeIds.includes(String(employee._id)));
   const activeCount = filteredEmployees.filter((employee) => employee.isActive).length;
   const inactiveCount = filteredEmployees.length - activeCount;
   const hasFilters = Boolean(search.trim() || status || department || hasAdvancedFilters);
@@ -919,7 +923,7 @@ export default function EmployeeList() {
                   </td>
                 </tr>
               ) : (
-                filteredEmployees.map((employee) => (
+                paginatedData.map((employee) => (
                   <tr key={employee._id}>
                     {canDeleteEmployee ? (
                       <td className="text-center">
@@ -1138,6 +1142,7 @@ export default function EmployeeList() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
 
       {statusConfirmation ? (
