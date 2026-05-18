@@ -488,7 +488,7 @@ export default function EmployeeEdit() {
                 </span>
               </div>
 
-              <label className="form-label">Employee Code *</label>
+              <label className="form-label">Employee Code</label>
               <input
                 className={`form-control${
                   fieldErrors.employeeCode ? " is-invalid" : " mb-3"
@@ -497,6 +497,8 @@ export default function EmployeeEdit() {
                 value={form.employeeCode}
                 onChange={handleChange}
                 placeholder="Employee Code"
+                readOnly
+                aria-readonly="true"
                 aria-invalid={fieldErrors.employeeCode ? "true" : "false"}
                 aria-describedby={
                   fieldErrors.employeeCode
