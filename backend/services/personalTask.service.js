@@ -1,5 +1,6 @@
 const Employee = require("../models/Employee");
 const PersonalTask = require("../models/PersonalTask");
+const { Types } = require("mongoose");
 
 const PERSONAL_TASK_STATUSES = ["pending", "completed"];
 const PERSONAL_TASK_REMINDER_TYPES = ["one_time", "daily", "weekly", "monthly"];
@@ -15,6 +16,9 @@ let schedulerInFlight = false;
 
 const normalizeText = (value) => String(value || "").trim();
 const normalizeId = (value) => String(value?._id || value || "").trim();
+const isValidObjectId = (value) => Types.ObjectId.isValid(String(value || "").trim());
+const escapeRegex = (value) =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const pad = (value) => String(value).padStart(2, "0");
 
@@ -47,6 +51,17 @@ const mapEmployeeSummary = (employee) => {
     displayName: formatEmployeeDisplayName(employee),
   };
 };
+
+const mapShareableEmployee = (employee) => ({
+  _id: normalizeId(employee),
+  employeeCode: normalizeText(employee?.employeeCode),
+  employeeName: normalizeText(employee?.employeeName),
+  email: normalizeText(employee?.email),
+  displayName:
+    normalizeText(employee?.employeeCode) && normalizeText(employee?.employeeName)
+      ? `${normalizeText(employee.employeeCode)} - ${normalizeText(employee.employeeName)}`
+      : normalizeText(employee?.employeeCode) || normalizeText(employee?.employeeName),
+});
 
 const getCreatorEmployee = (task) => task?.employee || null;
 const getAssignedEmployee = (task) => task?.assignedEmployee || task?.employee || null;
@@ -415,6 +430,309 @@ const mapPersonalTaskForResponse = (
   };
 };
 
+const populatePersonalTaskQuery = (query) =>
+  query
+    .populate("employee", "employeeCode employeeName email")
+    .populate("assignedEmployee", "employeeCode employeeName email")
+    .populate("completedBy", "employeeCode employeeName email");
+
+const buildVisibleTaskFilter = (employeeId) => ({
+  $or: [{ employee: employeeId }, { assignedEmployee: employeeId }],
+});
+
+const buildAssignedTaskFilter = (employeeId) => ({
+  $or: [
+    { assignedEmployee: employeeId },
+    { assignedEmployee: null, employee: employeeId },
+  ],
+});
+
+const sortTasksForList = (rows = []) =>
+  [...rows].sort((leftTask, rightTask) => {
+    const leftStatusRank = leftTask.status === "pending" ? 0 : 1;
+    const rightStatusRank = rightTask.status === "pending" ? 0 : 1;
+
+    if (leftStatusRank !== rightStatusRank) {
+      return leftStatusRank - rightStatusRank;
+    }
+
+    const leftTime = new Date(
+      leftTask.nextReminderAt ||
+        leftTask.lastTriggeredAt ||
+        leftTask.scheduledAt ||
+        leftTask.createdAt ||
+        0
+    ).getTime();
+    const rightTime = new Date(
+      rightTask.nextReminderAt ||
+        rightTask.lastTriggeredAt ||
+        rightTask.scheduledAt ||
+        rightTask.createdAt ||
+        0
+    ).getTime();
+
+    if (leftTask.status === "pending") {
+      return leftTime - rightTime;
+    }
+
+    return rightTime - leftTime;
+  });
+
+const findVisibleTaskById = async (taskId, employeeId) => {
+  if (!isValidObjectId(taskId)) return null;
+
+  return populatePersonalTaskQuery(
+    PersonalTask.findOne({
+      _id: taskId,
+      ...buildVisibleTaskFilter(employeeId),
+    })
+  );
+};
+
+const findCreatorTaskById = async (taskId, employeeId) => {
+  if (!isValidObjectId(taskId)) return null;
+
+  return populatePersonalTaskQuery(
+    PersonalTask.findOne({
+      _id: taskId,
+      employee: employeeId,
+    })
+  );
+};
+
+const findAssignedTaskById = async (taskId, employeeId) => {
+  if (!isValidObjectId(taskId)) return null;
+
+  return populatePersonalTaskQuery(
+    PersonalTask.findOne({
+      _id: taskId,
+      ...buildAssignedTaskFilter(employeeId),
+    })
+  );
+};
+
+const mapTaskForViewer = (task, employeeId) =>
+  mapPersonalTaskForResponse(task, {
+    viewerEmployeeId: employeeId,
+  });
+
+const listPersonalTasks = async ({ employeeId, search = "", status = "" }) => {
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const normalizedSearch = normalizeText(search);
+  const filterClauses = [buildVisibleTaskFilter(employeeId)];
+
+  if (normalizedStatus) {
+    filterClauses.push({ status: normalizedStatus });
+  }
+
+  if (normalizedSearch) {
+    filterClauses.push({
+      $or: [
+        { title: { $regex: escapeRegex(normalizedSearch), $options: "i" } },
+        { description: { $regex: escapeRegex(normalizedSearch), $options: "i" } },
+      ],
+    });
+  }
+
+  const filter =
+    filterClauses.length === 1 ? filterClauses[0] : { $and: filterClauses };
+  const rows = await populatePersonalTaskQuery(
+    PersonalTask.find(filter).sort({ createdAt: -1 })
+  );
+
+  return sortTasksForList(rows.map((row) => mapTaskForViewer(row, employeeId)));
+};
+
+const getPersonalTaskForViewer = async ({ taskId, employeeId }) => {
+  const task = await findVisibleTaskById(taskId, employeeId);
+  return task ? mapTaskForViewer(task, employeeId) : null;
+};
+
+const listShareableEmployees = async ({ search = "" } = {}) => {
+  const normalizedSearch = normalizeText(search);
+  const filter = {
+    isActive: true,
+  };
+
+  if (normalizedSearch) {
+    filter.$or = [
+      { employeeCode: { $regex: escapeRegex(normalizedSearch), $options: "i" } },
+      { employeeName: { $regex: escapeRegex(normalizedSearch), $options: "i" } },
+      { email: { $regex: escapeRegex(normalizedSearch), $options: "i" } },
+    ];
+  }
+
+  const rows = await Employee.find(
+    filter,
+    "employeeCode employeeName email"
+  ).sort({ employeeName: 1, employeeCode: 1 });
+
+  return rows.map((employee) => mapShareableEmployee(employee));
+};
+
+const createPersonalTaskForEmployee = async ({ body, employeeId, file = null }) => {
+  const validationResult = await validatePersonalTaskPayload({
+    body,
+    employeeId,
+    file,
+  });
+
+  if (validationResult.message) {
+    return validationResult;
+  }
+
+  const task = await PersonalTask.create(validationResult.payload);
+  const hydratedTask = await populatePersonalTaskQuery(PersonalTask.findById(task._id));
+
+  return {
+    task: mapTaskForViewer(hydratedTask, employeeId),
+  };
+};
+
+const sharePersonalTaskForEmployee = async ({ taskId, employeeId, assignedEmployeeId }) => {
+  const normalizedAssignedEmployeeId = normalizeText(assignedEmployeeId);
+
+  if (!isValidObjectId(normalizedAssignedEmployeeId)) {
+    return { status: 400, message: "Select a valid employee" };
+  }
+
+  const task = await findCreatorTaskById(taskId, employeeId);
+
+  if (!task) {
+    return { status: 404, message: "Personal reminder not found" };
+  }
+
+  if (task.status === "completed") {
+    return { status: 400, message: "Completed tasks cannot be reassigned" };
+  }
+
+  const assignedEmployee = await Employee.findOne(
+    {
+      _id: normalizedAssignedEmployeeId,
+      isActive: true,
+    },
+    "employeeCode employeeName email"
+  );
+
+  if (!assignedEmployee) {
+    return { status: 400, message: "Selected employee is invalid" };
+  }
+
+  const isAssigningBackToCreator = normalizeId(assignedEmployee) === normalizeId(task.employee);
+
+  task.assignedEmployee = assignedEmployee._id;
+  task.sharedAt = isAssigningBackToCreator ? null : new Date();
+  task.completedAt = null;
+  task.completedBy = null;
+  task.lastNotificationReadAt = null;
+  await task.save();
+
+  await task.populate("assignedEmployee", "employeeCode employeeName email");
+
+  return {
+    message: isAssigningBackToCreator
+      ? "Task assigned back to you"
+      : "Task shared successfully",
+    task: mapTaskForViewer(task, employeeId),
+  };
+};
+
+const completePersonalTaskForEmployee = async ({ taskId, employeeId }) => {
+  const task = await findAssignedTaskById(taskId, employeeId);
+
+  if (!task) {
+    return { status: 404, message: "Personal reminder not found" };
+  }
+
+  if (task.status === "completed") {
+    return {
+      message: "Personal reminder already completed",
+      task: mapTaskForViewer(task, employeeId),
+    };
+  }
+
+  const now = new Date();
+  task.status = "completed";
+  task.completedAt = now;
+  task.completedBy = employeeId;
+  task.nextReminderAt = null;
+  task.lastNotificationReadAt = now;
+  await task.save();
+  await task.populate("completedBy", "employeeCode employeeName email");
+
+  return {
+    message: "Personal reminder marked as completed",
+    task: mapTaskForViewer(task, employeeId),
+  };
+};
+
+const markPersonalTaskNotificationReadForEmployee = async ({ taskId, employeeId }) => {
+  const task = await findAssignedTaskById(taskId, employeeId);
+
+  if (!task) {
+    return { status: 404, message: "Personal reminder not found" };
+  }
+
+  const notificationState = getPersonalTaskNotificationState(
+    task,
+    new Date(),
+    DEFAULT_NOTIFICATION_WINDOW_MS,
+    employeeId
+  );
+
+  if (notificationState.hasUnreadNotification) {
+    task.lastNotificationReadAt = new Date();
+    await task.save();
+  }
+
+  return {
+    message: "Reminder notification updated",
+    task: mapTaskForViewer(task, employeeId),
+  };
+};
+
+const listPersonalTaskNotifications = async ({ employeeId }) => {
+  const rows = await populatePersonalTaskQuery(
+    PersonalTask.find({
+      status: "pending",
+      ...buildAssignedTaskFilter(employeeId),
+    }).sort({ nextReminderAt: 1, createdAt: -1 })
+  );
+  const due = [];
+  const upcoming = [];
+
+  for (const row of rows) {
+    const mappedRow = mapTaskForViewer(row, employeeId);
+
+    if (mappedRow.notificationState === "due") {
+      due.push(mappedRow);
+    } else if (mappedRow.notificationState === "upcoming") {
+      upcoming.push(mappedRow);
+    }
+  }
+
+  due.sort(
+    (leftTask, rightTask) =>
+      new Date(rightTask.notificationAt || 0).getTime() -
+      new Date(leftTask.notificationAt || 0).getTime()
+  );
+  upcoming.sort(
+    (leftTask, rightTask) =>
+      new Date(leftTask.notificationAt || 0).getTime() -
+      new Date(rightTask.notificationAt || 0).getTime()
+  );
+
+  return {
+    counts: {
+      due: due.length,
+      upcoming: upcoming.length,
+      total: due.length + upcoming.length,
+    },
+    due,
+    upcoming,
+  };
+};
+
 const validatePersonalTaskPayload = async ({ body, employeeId, file = null }) => {
   const title = normalizeText(body?.title);
   const description = normalizeText(body?.description);
@@ -578,10 +896,18 @@ module.exports = {
   PERSONAL_TASK_REMINDER_TYPES,
   PERSONAL_TASK_STATUSES,
   advanceReminderUntilFuture,
+  completePersonalTaskForEmployee,
+  createPersonalTaskForEmployee,
+  getPersonalTaskForViewer,
   getPersonalTaskNotificationState,
   isEmployeeRequester,
+  listPersonalTaskNotifications,
+  listPersonalTasks,
+  listShareableEmployees,
   mapPersonalTaskForResponse,
+  markPersonalTaskNotificationReadForEmployee,
   runPersonalTaskScheduler,
+  sharePersonalTaskForEmployee,
   startPersonalTaskScheduler,
   stopPersonalTaskScheduler,
   validatePersonalTaskPayload,
