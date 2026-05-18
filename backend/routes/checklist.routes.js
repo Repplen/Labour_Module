@@ -4,6 +4,7 @@ const { requireAnyPermission, requirePermission } = require("../middleware/permi
 const upload = require("../middleware/checklistUpload");
 const excelUpload = require("../middleware/excelUpload");
 const { validateRequest } = require("../middleware/validateRequest");
+const checklistTransferRoutes = require("./checklistTransfer.routes");
 const {
   checklistBulkDeleteSchema,
   checklistCreateSchema,
@@ -15,8 +16,6 @@ const {
   approveChecklistAdminRequest,
   bulkDeleteChecklists,
   createChecklist,
-  createPermanentChecklistTransfer,
-  createTemporaryChecklistTransfer,
   decideChecklistTask,
   deleteChecklist,
   deleteGeneratedChecklistTask,
@@ -29,8 +28,6 @@ const {
   getChecklistById,
   getChecklistRequestNotifications,
   getChecklistSetupData,
-  getChecklistTransferChecklists,
-  getChecklistTransferHistory,
   getChecklistTaskById,
   getChecklistTaskReport,
   getChecklistTaskReportOptions,
@@ -119,18 +116,7 @@ router.post(
   validateRequest({ params: idParamSchema }),
   rejectChecklistAdminRequest
 );
-router.get(
-  "/transfers/checklists",
-  auth,
-  requirePermission("checklist_transfer", "view"),
-  getChecklistTransferChecklists
-);
-router.get(
-  "/transfers/history",
-  auth,
-  requirePermission("checklist_transfer", "view"),
-  getChecklistTransferHistory
-);
+router.use("/transfers", checklistTransferRoutes);
 router.get(
   "/tasks/report/export/excel",
   auth,
@@ -214,18 +200,6 @@ router.post(
   requirePermission("approval_inbox", "approve"),
   validateRequest({ params: idParamSchema, body: checklistDecisionSchema }),
   decideChecklistTask
-);
-router.post(
-  "/transfers/permanent",
-  auth,
-  requirePermission("checklist_transfer", "transfer"),
-  createPermanentChecklistTransfer
-);
-router.post(
-  "/transfers/temporary",
-  auth,
-  requirePermission("checklist_transfer", "transfer"),
-  createTemporaryChecklistTransfer
 );
 router.post(
   "/import/excel",
