@@ -11,7 +11,7 @@ import {
   sharePersonalTask,
 } from "../../services/personalTask.service";
 import { IMAGE_FILE_OPTIONS, validateFile } from "../../utils/fileValidation";
-import { buildBrowserNotificationBody, formatPersonalTaskStatus } from "../../utils/personalTaskDisplay";
+import { buildBrowserNotificationBody, formatPersonalTaskStatus, formatReminderTypeLabel } from "../../utils/personalTaskDisplay";
 import {
   buildPersonalTaskFormData,
   getPermissionLabel,
@@ -29,6 +29,7 @@ export const useOwnTasks = () => {
   const attachmentInputRef = useRef(null);
   const loadTasksRef = useRef(async () => {});
   const loadTaskDetailRef = useRef(async () => {});
+  const notifiedDueTaskIdsRef = useRef(new Set());
 
   const [form, setForm] = useState(initialPersonalTaskFormState);
   const [attachmentFile, setAttachmentFile] = useState(null);
@@ -37,6 +38,7 @@ export const useOwnTasks = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [reminderTypeFilter, setReminderTypeFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,7 +71,11 @@ export const useOwnTasks = () => {
   const upcomingCount = rows.filter((row) => row.notificationState === "upcoming").length;
   const sharedByMeCount = rows.filter((row) => row.viewerRelationship === "creator").length;
   const assignedToMeCount = rows.filter((row) => row.viewerRelationship === "assignee").length;
-  const hasFilters = Boolean(search.trim() || statusFilter);
+  const hasFilters = Boolean(search.trim() || statusFilter || reminderTypeFilter);
+
+  const tableRows = reminderTypeFilter
+    ? rows.filter((row) => row.reminderType === reminderTypeFilter)
+    : rows;
 
   const stats = useMemo(
     () => [
@@ -77,37 +83,37 @@ export const useOwnTasks = () => {
         label: "Total Tasks",
         value: rows.length,
         meta: "Own and shared reminders",
-        accentClass: "own-tasks-stat-card--primary",
+        accentClass: "page-stat-card--primary",
       },
       {
         label: "Pending Focus",
         value: pendingCount,
         meta: "Still waiting for action",
-        accentClass: "own-tasks-stat-card--warning",
+        accentClass: "page-stat-card--warning",
       },
       {
         label: "Completed",
         value: completedCount,
         meta: "Closed reminders",
-        accentClass: "own-tasks-stat-card--success",
+        accentClass: "page-stat-card--success",
       },
       {
         label: "Due Now",
         value: dueCount,
         meta: "Need attention first",
-        accentClass: "own-tasks-stat-card--danger",
+        accentClass: "page-stat-card--danger",
       },
       {
         label: "Upcoming",
         value: upcomingCount,
         meta: "Scheduled next reminders",
-        accentClass: "own-tasks-stat-card--accent",
+        accentClass: "page-stat-card--accent",
       },
       {
         label: "Shared by You",
         value: sharedByMeCount,
         meta: `${assignedToMeCount} currently assigned to you`,
-        accentClass: "own-tasks-stat-card--neutral",
+        accentClass: "page-stat-card--neutral",
       },
     ],
     [
@@ -124,6 +130,7 @@ export const useOwnTasks = () => {
   const activeFilterPills = [
     search.trim() ? `Search: ${search.trim()}` : "",
     statusFilter ? `Status: ${formatPersonalTaskStatus(statusFilter)}` : "",
+    reminderTypeFilter ? `Type: ${formatReminderTypeLabel(reminderTypeFilter)}` : "",
   ].filter(Boolean);
 
   const visibleShareableEmployees = useMemo(() => {
@@ -142,6 +149,47 @@ export const useOwnTasks = () => {
   useEffect(() => {
     void loadTasksRef.current();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadTasksRef.current();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      window.Notification.permission !== "granted"
+    ) return;
+
+    const currentDueIds = new Set(
+      rows
+        .filter((r) => r.notificationState === "due" && r.hasUnreadNotification)
+        .map((r) => String(r._id))
+    );
+
+    rows
+      .filter(
+        (r) =>
+          r.notificationState === "due" &&
+          r.hasUnreadNotification &&
+          !notifiedDueTaskIdsRef.current.has(String(r._id))
+      )
+      .forEach((task) => {
+        new window.Notification(task.title || "Own Task Reminder", {
+          body: buildBrowserNotificationBody(task) || "This reminder is now due.",
+        });
+        notifiedDueTaskIdsRef.current.add(String(task._id));
+      });
+
+    for (const notifiedId of notifiedDueTaskIdsRef.current) {
+      if (!currentDueIds.has(notifiedId)) {
+        notifiedDueTaskIdsRef.current.delete(notifiedId);
+      }
+    }
+  }, [rows]);
 
   useEffect(() => {
     if (!id) {
@@ -493,23 +541,27 @@ export const useOwnTasks = () => {
     },
     filters: {
       hasFilters,
+      reminderTypeFilter,
       search,
+      setReminderTypeFilter,
       setSearch,
       setStatusFilter,
       statusFilter,
       clearFilters: () => {
         setSearch("");
         setStatusFilter("");
+        setReminderTypeFilter("");
       },
     },
     table: {
       completingTaskId,
+      hasFilters,
       id,
       loading,
       onCompleteTask: handleCompleteTask,
       onOpenShareModal: openShareModal,
       onViewTask: (taskId) => navigate(`/own-tasks/${taskId}`),
-      rows,
+      rows: tableRows,
       sharingTaskId,
     },
     shareModal: {

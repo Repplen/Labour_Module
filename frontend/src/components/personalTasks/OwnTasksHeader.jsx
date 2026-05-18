@@ -6,7 +6,7 @@ export default function OwnTasksHeader({
   stats,
 }) {
   return (
-    <div className="page-intro-card mb-4 own-tasks-hero">
+    <div className="page-intro-card mb-4">
       <div className="list-toolbar">
         <div>
           <div className="page-kicker">User Panel</div>
@@ -17,9 +17,9 @@ export default function OwnTasksHeader({
           </div>
 
           {activeFilterPills.length ? (
-            <div className="own-tasks-filter-pills mt-3">
+            <div className="employee-directory-filter-pills mt-3">
               {activeFilterPills.map((pill) => (
-                <span key={pill} className="own-tasks-filter-pill">
+                <span key={pill} className="employee-directory-filter-pill">
                   {pill}
                 </span>
               ))}
@@ -31,11 +31,11 @@ export default function OwnTasksHeader({
           )}
         </div>
 
-        <div className="d-flex flex-wrap gap-2 align-items-start own-tasks-hero__actions">
+        <div className="d-flex flex-wrap gap-2 align-items-start">
           <span className="summary-chip summary-chip--neutral">
             {notificationPermissionLabel}
           </span>
-          {notificationPermission !== "granted" && notificationPermission !== "unsupported" ? (
+          {notificationPermission === "default" ? (
             <button
               type="button"
               className="btn btn-outline-primary"
@@ -47,12 +47,12 @@ export default function OwnTasksHeader({
         </div>
       </div>
 
-      <div className="own-tasks-stats mt-4">
+      <div className="page-stats-row mt-4">
         {stats.map((stat) => (
-          <div key={stat.label} className={`own-tasks-stat-card ${stat.accentClass}`}>
-            <div className="own-tasks-stat-card__label">{stat.label}</div>
-            <div className="own-tasks-stat-card__value">{stat.value}</div>
-            <div className="own-tasks-stat-card__meta">{stat.meta}</div>
+          <div key={stat.label} className={`page-stat-card ${stat.accentClass}`}>
+            <div className="page-stat-card__label">{stat.label}</div>
+            <div className="page-stat-card__value">{stat.value}</div>
+            <div className="page-stat-card__meta">{stat.meta}</div>
           </div>
         ))}
       </div>

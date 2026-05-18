@@ -112,7 +112,7 @@ export const formatPersonalTaskStatus = (value) => {
 export const getPersonalTaskStatusBadgeClass = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
 
-  return normalized === "completed" ? "bg-success" : "bg-warning text-dark";
+  return normalized === "completed" ? "text-bg-success" : "text-bg-warning";
 };
 
 export const formatNotificationStateLabel = (value) => {
@@ -126,9 +126,9 @@ export const formatNotificationStateLabel = (value) => {
 export const getNotificationStateBadgeClass = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
 
-  if (normalized === "due") return "bg-danger";
-  if (normalized === "upcoming") return "bg-primary";
-  return "bg-secondary";
+  if (normalized === "due") return "text-bg-danger";
+  if (normalized === "upcoming") return "text-bg-primary";
+  return "text-bg-secondary";
 };
 
 export const formatEmployeeLabel = (employee) => {

@@ -447,6 +447,12 @@ const buildAssignedTaskFilter = (employeeId) => ({
   ],
 });
 
+const getNotificationUrgencyRank = (task) => {
+  if (task.notificationState === "due") return 0;
+  if (task.notificationState === "upcoming") return 1;
+  return 2;
+};
+
 const sortTasksForList = (rows = []) =>
   [...rows].sort((leftTask, rightTask) => {
     const leftStatusRank = leftTask.status === "pending" ? 0 : 1;
@@ -454,6 +460,15 @@ const sortTasksForList = (rows = []) =>
 
     if (leftStatusRank !== rightStatusRank) {
       return leftStatusRank - rightStatusRank;
+    }
+
+    if (leftTask.status === "pending") {
+      const leftUrgency = getNotificationUrgencyRank(leftTask);
+      const rightUrgency = getNotificationUrgencyRank(rightTask);
+
+      if (leftUrgency !== rightUrgency) {
+        return leftUrgency - rightUrgency;
+      }
     }
 
     const leftTime = new Date(

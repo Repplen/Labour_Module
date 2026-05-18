@@ -10,9 +10,11 @@ import {
 import { getViewerTaskLabel } from "../../utils/personalTaskForm";
 import Pagination from "../Pagination";
 import { usePagination } from "../../hooks/usePagination";
+import OwnTaskRowActions from "./OwnTaskRowActions";
 
 export default function OwnTaskTable({
   completingTaskId,
+  hasFilters,
   id,
   loading,
   onCompleteTask,
@@ -29,7 +31,7 @@ export default function OwnTaskTable({
         <table className="table table-bordered align-middle mb-0 own-tasks-table">
           <thead className="table-dark">
             <tr>
-              <th>#</th>
+              <th>Sl.No</th>
               <th>Title</th>
               <th>Reminder</th>
               <th>Type</th>
@@ -47,8 +49,8 @@ export default function OwnTaskTable({
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan="7" className="text-center">
-                  No tasks found
+                <td colSpan="7" className="text-center text-muted py-3">
+                  {hasFilters ? "No tasks match the current filters." : "No tasks found."}
                 </td>
               </tr>
             ) : (
@@ -98,64 +100,29 @@ export default function OwnTaskTable({
                     </td>
                     <td>{formatReminderRuleLabel(row)}</td>
                     <td>
-                      <div className="d-flex flex-column gap-1">
-                        <span
-                          className={`badge align-self-start ${getNotificationStateBadgeClass(
-                            row.notificationState
-                          )}`}
-                        >
-                          {formatNotificationStateLabel(row.notificationState)}
-                        </span>
-                        <span className="small text-muted">
+                      <span className={`badge rounded-pill ${getNotificationStateBadgeClass(row.notificationState)}`}>
+                        {formatNotificationStateLabel(row.notificationState)}
+                      </span>
+                      {row.notificationAt ? (
+                        <div className="small text-muted mt-1">
                           {formatPersonalTaskDateTime(row.notificationAt)}
-                        </span>
-                      </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td>
-                      <span className={`badge ${getPersonalTaskStatusBadgeClass(row.status)}`}>
+                      <span className={`badge rounded-pill ${getPersonalTaskStatusBadgeClass(row.status)}`}>
                         {formatPersonalTaskStatus(row.status)}
                       </span>
                     </td>
                     <td>
-                      <div className="d-flex flex-wrap gap-2 own-tasks-row-actions">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => onViewTask(row._id)}
-                        >
-                          View
-                        </button>
-                        {row.canShare && row.status !== "completed" ? (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => {
-                              void onOpenShareModal(row);
-                            }}
-                            disabled={String(sharingTaskId) === String(row._id)}
-                          >
-                            Sharing Employee
-                          </button>
-                        ) : null}
-                        {row.canComplete || row.status === "completed" ? (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-success"
-                            onClick={() => onCompleteTask(row._id)}
-                            disabled={
-                              row.status === "completed" ||
-                              !row.canComplete ||
-                              String(completingTaskId) === String(row._id)
-                            }
-                          >
-                            {String(completingTaskId) === String(row._id)
-                              ? "Updating..."
-                              : row.status === "completed"
-                              ? "Completed"
-                              : "Complete"}
-                          </button>
-                        ) : null}
-                      </div>
+                      <OwnTaskRowActions
+                        row={row}
+                        onViewTask={onViewTask}
+                        onOpenShareModal={onOpenShareModal}
+                        onCompleteTask={onCompleteTask}
+                        completingTaskId={completingTaskId}
+                        sharingTaskId={sharingTaskId}
+                      />
                     </td>
                   </tr>
                 );

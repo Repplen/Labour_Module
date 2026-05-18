@@ -28,8 +28,8 @@ export default function OwnTaskDetailPanel({
   taskDetail,
 }) {
   return (
-    <div className="soft-card h-100 own-tasks-panel own-tasks-panel--detail">
-      <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
+    <div className="soft-card h-100">
+      <div className="d-flex justify-content-between align-items-start gap-3 pb-3 mb-3 border-bottom">
         <div>
           <h5 className="mb-1">Task Details</h5>
           <div className="form-help">
@@ -49,118 +49,74 @@ export default function OwnTaskDetailPanel({
       </div>
 
       {detailLoading ? (
-        <div className="empty-state py-4 own-tasks-detail-empty">
-          Loading reminder details...
-        </div>
+        <div className="empty-state py-4">Loading reminder details...</div>
       ) : taskDetail ? (
         <div className="d-flex flex-column gap-3">
-          <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 own-tasks-detail-header">
-            <div>
-              <h4 className="mb-1">{taskDetail.title || "-"}</h4>
-              <div className="text-muted">
+          <div className="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div className="flex-grow-1">
+              <h4 className="mb-2" style={{ fontWeight: 800, letterSpacing: "-0.025em", color: "var(--ink)", lineHeight: 1.2 }}>
+                {taskDetail.title || "-"}
+              </h4>
+              <p className="mb-0" style={{ fontSize: "var(--text-sm)", color: "var(--ink-soft)", lineHeight: 1.65, maxWidth: "42rem" }}>
                 {taskDetail.description || "No description added for this reminder."}
-              </div>
-              <div className="small text-muted mt-2">
-                Shared by: {formatEmployeeLabel(taskDetail.creator)}
-              </div>
-              <div className="small text-muted">
-                Assigned to: {formatEmployeeLabel(taskDetail.assignedEmployee)}
-              </div>
+              </p>
             </div>
 
-            <div className="d-flex flex-wrap gap-2 own-tasks-detail-badges">
+            <div className="d-flex flex-wrap gap-2">
               <span className="badge text-bg-light">{getViewerTaskLabel(taskDetail)}</span>
               <span className={`badge ${getPersonalTaskStatusBadgeClass(taskDetail.status)}`}>
                 {formatPersonalTaskStatus(taskDetail.status)}
               </span>
-              <span
-                className={`badge ${getNotificationStateBadgeClass(
-                  taskDetail.notificationState
-                )}`}
-              >
+              <span className={`badge ${getNotificationStateBadgeClass(taskDetail.notificationState)}`}>
                 {formatNotificationStateLabel(taskDetail.notificationState)}
               </span>
             </div>
           </div>
 
           {taskAttachmentUrl ? (
-            <div className="own-tasks-detail-attachment">
-              <div className="small text-muted mb-2">Attached Image</div>
-              <a
-                href={taskAttachmentUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="d-inline-block own-tasks-detail-attachment__link"
-              >
+            <div>
+              <div className="detail-field__label mb-2">Attached Image</div>
+              <a href={taskAttachmentUrl} target="_blank" rel="noreferrer" className="d-inline-block">
                 <img
                   src={taskAttachmentUrl}
                   alt={taskDetail.title || "Own task attachment"}
-                  className="own-tasks-detail-attachment__image"
+                  className="detail-attachment__image"
                 />
               </a>
             </div>
           ) : null}
 
-          <div className="row g-3 own-tasks-detail-grid">
+          <div className="row g-3">
             <DetailField label="Reminder Date" value={formatPersonalTaskDate(taskDetail.scheduledAt)} />
-            <DetailField
-              label="Reminder Time"
-              value={formatReminderTimeLabel(taskDetail.reminderTime)}
-            />
-            <DetailField
-              label="Reminder Type"
-              value={formatReminderTypeLabel(taskDetail.reminderType)}
-            />
-            <DetailField label="Shared By" value={formatEmployeeLabel(taskDetail.creator)} />
-            <DetailField
-              label="Assigned To"
-              value={formatEmployeeLabel(taskDetail.assignedEmployee)}
-            />
+            <DetailField label="Reminder Time" value={formatReminderTimeLabel(taskDetail.reminderTime)} />
+            <DetailField label="Reminder Type" value={formatReminderTypeLabel(taskDetail.reminderType)} />
             <DetailField label="Repeat Rule" value={formatReminderRuleLabel(taskDetail)} />
             {taskDetail.reminderType === "weekly" ? (
-              <DetailField
-                label="Weekly On"
-                value={formatWeeklyDayLabel(taskDetail.weeklyDayOfWeek)}
-              />
+              <DetailField label="Weekly On" value={formatWeeklyDayLabel(taskDetail.weeklyDayOfWeek)} />
             ) : null}
             {taskDetail.reminderType === "monthly" ? (
-              <DetailField
-                label="Monthly On"
-                value={formatMonthlyDayLabel(taskDetail.monthlyDayOfMonth)}
-              />
+              <DetailField label="Monthly On" value={formatMonthlyDayLabel(taskDetail.monthlyDayOfMonth)} />
             ) : null}
+            <DetailField label="Shared By" value={formatEmployeeLabel(taskDetail.creator)} />
+            <DetailField label="Assigned To" value={formatEmployeeLabel(taskDetail.assignedEmployee)} />
             <DetailField label="Created" value={formatPersonalTaskDateTime(taskDetail.createdAt)} />
             <DetailField label="Shared At" value={formatPersonalTaskDateTime(taskDetail.sharedAt)} />
-            <DetailField
-              label="Next Reminder"
-              value={formatPersonalTaskDateTime(taskDetail.nextReminderAt)}
-            />
-            <DetailField
-              label="Last Triggered"
-              value={formatPersonalTaskDateTime(taskDetail.lastTriggeredAt)}
-            />
-            <DetailField
-              label="Completed At"
-              value={formatPersonalTaskDateTime(taskDetail.completedAt)}
-            />
+            <DetailField label="Next Reminder" value={formatPersonalTaskDateTime(taskDetail.nextReminderAt)} />
+            <DetailField label="Last Triggered" value={formatPersonalTaskDateTime(taskDetail.lastTriggeredAt)} />
+            <DetailField label="Completed At" value={formatPersonalTaskDateTime(taskDetail.completedAt)} />
             <DetailField label="Completed By" value={formatEmployeeLabel(taskDetail.completedBy)} />
-            <DetailField
-              label="Notification State"
-              value={formatNotificationStateLabel(taskDetail.notificationState)}
-            />
+            <DetailField label="Notification State" value={formatNotificationStateLabel(taskDetail.notificationState)} />
           </div>
 
-          <div className="d-flex flex-wrap gap-2 own-tasks-detail-actions">
+          <div className="d-flex flex-wrap gap-2">
             {taskDetail.canShare && taskDetail.status !== "completed" ? (
               <button
                 type="button"
                 className="btn btn-outline-primary"
-                onClick={() => {
-                  void onOpenShareModal(taskDetail);
-                }}
+                onClick={() => { void onOpenShareModal(taskDetail); }}
                 disabled={String(sharingTaskId) === String(taskDetail._id)}
               >
-                Sharing Employee
+                {String(sharingTaskId) === String(taskDetail._id) ? "Sharing..." : "Sharing Employee"}
               </button>
             ) : null}
 
@@ -186,7 +142,7 @@ export default function OwnTaskDetailPanel({
             {taskDetail.hasUnreadNotification ? (
               <button
                 type="button"
-                className="btn btn-outline-primary"
+                className="btn btn-outline-secondary"
                 onClick={() => markReminderRead(taskDetail._id)}
               >
                 Mark Notification Read
@@ -195,7 +151,7 @@ export default function OwnTaskDetailPanel({
           </div>
         </div>
       ) : (
-        <div className="empty-state py-5 own-tasks-detail-empty">
+        <div className="empty-state py-5">
           No task selected. Use the list below or the bell icon in the navbar to open one.
         </div>
       )}
