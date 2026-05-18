@@ -23,6 +23,14 @@ export const sharePersonalTask = (taskId, assignedEmployeeId) =>
 export const completePersonalTask = (taskId) =>
   api.patch(`/personal-tasks/${taskId}/complete`);
 
+export const updatePersonalTask = (taskId, payload) =>
+  api.put(`/personal-tasks/${taskId}`, payload, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const deletePersonalTask = (taskId) =>
+  api.delete(`/personal-tasks/${taskId}`);
+
 export const markPersonalTaskRead = (taskId) =>
   api.post(`/personal-tasks/${taskId}/read`);
 

@@ -1,6 +1,7 @@
 const {
   completePersonalTaskForEmployee,
   createPersonalTaskForEmployee,
+  deletePersonalTaskForEmployee,
   getPersonalTaskForViewer,
   isEmployeeRequester,
   listPersonalTaskNotifications,
@@ -8,6 +9,7 @@ const {
   listShareableEmployees,
   markPersonalTaskNotificationReadForEmployee,
   sharePersonalTaskForEmployee,
+  updatePersonalTaskForEmployee,
 } = require("../services/personalTask.service");
 
 const normalizeText = (value) => String(value || "").trim();
@@ -207,6 +209,44 @@ exports.markPersonalTaskNotificationRead = async (req, res) => {
   } catch (err) {
     console.error("MARK PERSONAL TASK NOTIFICATION READ ERROR:", err);
     return res.status(500).json({ message: "Failed to update reminder notification" });
+  }
+};
+
+exports.updatePersonalTask = async (req, res) => {
+  try {
+    if (!requireEmployeeRequester(req, res, "Only employees can update personal reminders")) {
+      return;
+    }
+
+    const result = await updatePersonalTaskForEmployee({
+      taskId: req.params.id,
+      employeeId: req.user.id,
+      body: req.body,
+      file: req.file || null,
+    });
+
+    return sendServiceResult(res, result);
+  } catch (err) {
+    console.error("UPDATE PERSONAL TASK ERROR:", err);
+    return res.status(500).json({ message: "Failed to update personal reminder" });
+  }
+};
+
+exports.deletePersonalTask = async (req, res) => {
+  try {
+    if (!requireEmployeeRequester(req, res, "Only employees can delete personal reminders")) {
+      return;
+    }
+
+    const result = await deletePersonalTaskForEmployee({
+      taskId: req.params.id,
+      employeeId: req.user.id,
+    });
+
+    return sendServiceResult(res, result);
+  } catch (err) {
+    console.error("DELETE PERSONAL TASK ERROR:", err);
+    return res.status(500).json({ message: "Failed to delete personal reminder" });
   }
 };
 

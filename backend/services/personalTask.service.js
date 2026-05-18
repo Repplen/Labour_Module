@@ -681,6 +681,81 @@ const completePersonalTaskForEmployee = async ({ taskId, employeeId }) => {
   };
 };
 
+const findOwnedTaskById = async (taskId, employeeId) => {
+  if (!isValidObjectId(taskId)) return null;
+  return populatePersonalTaskQuery(
+    PersonalTask.findOne({ _id: taskId, employee: employeeId })
+  );
+};
+
+const updatePersonalTaskForEmployee = async ({ taskId, employeeId, body, file = null }) => {
+  const task = await findOwnedTaskById(taskId, employeeId);
+
+  if (!task) {
+    return { status: 404, message: "Personal reminder not found" };
+  }
+
+  if (task.status === "completed") {
+    return { status: 400, message: "Completed tasks cannot be edited" };
+  }
+
+  const title = normalizeText(body?.title);
+  const description = normalizeText(body?.description);
+  const reminderDate = normalizeText(body?.date || body?.reminderDate);
+  const reminderTime = normalizeTimeInput(body?.time || body?.reminderTime);
+  const reminderType = normalizeText(body?.reminderType).toLowerCase() || "one_time";
+  const weeklyDayOfWeek = parseWeekDayInput(body?.weeklyDayOfWeek);
+  const monthlyDayOfMonth = parseMonthDayInput(body?.monthlyDayOfMonth);
+  const scheduledStart = combineDateAndTime(reminderDate, reminderTime);
+  const scheduledAt = getFirstReminderAt({ reminderType, scheduledStart, weeklyDayOfWeek, monthlyDayOfMonth });
+
+  if (!title || !reminderDate || !reminderTime) {
+    return { status: 400, message: "Title, date, and time are required" };
+  }
+
+  if (!PERSONAL_TASK_REMINDER_TYPES.includes(reminderType)) {
+    return { status: 400, message: "Invalid reminder type" };
+  }
+
+  if (reminderType === "weekly" && weeklyDayOfWeek === null) {
+    return { status: 400, message: "Select the weekday for weekly reminders" };
+  }
+
+  if (reminderType === "monthly" && monthlyDayOfMonth === null) {
+    return { status: 400, message: "Select the day of month for monthly reminders" };
+  }
+
+  task.title = title;
+  task.description = description;
+  task.reminderDate = reminderDate;
+  task.reminderTime = reminderTime;
+  task.reminderType = reminderType;
+  task.weeklyDayOfWeek = reminderType === "weekly" ? weeklyDayOfWeek : null;
+  task.monthlyDayOfMonth = reminderType === "monthly" ? monthlyDayOfMonth : null;
+  task.scheduledAt = scheduledAt || scheduledStart;
+  task.nextReminderAt = scheduledAt || scheduledStart;
+  if (file) task.attachment = file.filename;
+
+  await task.save();
+
+  return {
+    message: "Task updated successfully",
+    task: mapTaskForViewer(task, employeeId),
+  };
+};
+
+const deletePersonalTaskForEmployee = async ({ taskId, employeeId }) => {
+  const task = await findOwnedTaskById(taskId, employeeId);
+
+  if (!task) {
+    return { status: 404, message: "Personal reminder not found" };
+  }
+
+  await PersonalTask.deleteOne({ _id: taskId });
+
+  return { message: "Task deleted successfully" };
+};
+
 const markPersonalTaskNotificationReadForEmployee = async ({ taskId, employeeId }) => {
   const task = await findAssignedTaskById(taskId, employeeId);
 
@@ -913,6 +988,7 @@ module.exports = {
   advanceReminderUntilFuture,
   completePersonalTaskForEmployee,
   createPersonalTaskForEmployee,
+  deletePersonalTaskForEmployee,
   getPersonalTaskForViewer,
   getPersonalTaskNotificationState,
   isEmployeeRequester,
@@ -925,5 +1001,6 @@ module.exports = {
   sharePersonalTaskForEmployee,
   startPersonalTaskScheduler,
   stopPersonalTaskScheduler,
+  updatePersonalTaskForEmployee,
   validatePersonalTaskPayload,
 };

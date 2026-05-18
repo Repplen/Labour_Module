@@ -3,12 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   completePersonalTask,
   createPersonalTask,
+  deletePersonalTask,
   getPersonalTaskById,
   getPersonalTasks,
   getPersonalTaskUploadBaseUrl,
   getShareableEmployees,
   markPersonalTaskRead,
   sharePersonalTask,
+  updatePersonalTask,
 } from "../../services/personalTask.service";
 import { IMAGE_FILE_OPTIONS, validateFile } from "../../utils/fileValidation";
 import { buildBrowserNotificationBody, formatPersonalTaskStatus, formatReminderTypeLabel } from "../../utils/personalTaskDisplay";
@@ -20,6 +22,7 @@ import {
   initialPersonalTaskFormState,
   isOwnTaskEmployeeUser,
 } from "../../utils/personalTaskForm";
+import { showToast } from "../../utils/toastUtils";
 
 export const useOwnTasks = () => {
   const navigate = useNavigate();
@@ -27,6 +30,8 @@ export const useOwnTasks = () => {
   const user = getStoredUser();
   const isEmployee = isOwnTaskEmployeeUser(user);
   const attachmentInputRef = useRef(null);
+  const editAttachmentInputRef = useRef(null);
+  const editTargetTaskIdRef = useRef("");
   const loadTasksRef = useRef(async () => {});
   const loadTaskDetailRef = useRef(async () => {});
   const notifiedDueTaskIdsRef = useRef(new Set());
@@ -43,11 +48,20 @@ export const useOwnTasks = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState("");
+  const [confirmCompleteTaskId, setConfirmCompleteTaskId] = useState("");
   const [shareableEmployees, setShareableEmployees] = useState([]);
   const [shareEmployeeSearch, setShareEmployeeSearch] = useState("");
   const [shareModalTask, setShareModalTask] = useState(null);
   const [shareListLoading, setShareListLoading] = useState(false);
   const [sharingTaskId, setSharingTaskId] = useState("");
+  const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState(initialPersonalTaskFormState);
+  const [editAttachmentFile, setEditAttachmentFile] = useState(null);
+  const [editAttachmentPreview, setEditAttachmentPreview] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(() =>
     typeof window !== "undefined" && "Notification" in window
       ? window.Notification.permission
@@ -294,7 +308,7 @@ export const useOwnTasks = () => {
     } catch (err) {
       console.error("Shareable employees load failed:", err);
       setShareableEmployees([]);
-      alert(err.response?.data?.message || "Failed to load employees");
+      showToast(setToast, err.response?.data?.message || "Failed to load employees.", "error");
     } finally {
       setShareListLoading(false);
     }
@@ -387,7 +401,7 @@ export const useOwnTasks = () => {
     const validationMessage = validateFile(file, IMAGE_FILE_OPTIONS);
 
     if (validationMessage) {
-      alert(validationMessage);
+      showToast(setToast, validationMessage, "warning");
       event.target.value = "";
       clearAttachmentSelection();
       return;
@@ -434,7 +448,7 @@ export const useOwnTasks = () => {
       }
     } catch (err) {
       console.error("Personal task create failed:", err);
-      alert(err.response?.data?.message || "Failed to create personal reminder");
+      showToast(setToast, err.response?.data?.message || "Failed to create reminder.", "error");
     } finally {
       setSaving(false);
     }
@@ -457,7 +471,7 @@ export const useOwnTasks = () => {
       await loadTasks();
     } catch (err) {
       console.error("Personal task share failed:", err);
-      alert(err.response?.data?.message || "Failed to share personal reminder");
+      showToast(setToast, err.response?.data?.message || "Failed to share task.", "error");
     } finally {
       setSharingTaskId("");
     }
@@ -474,12 +488,158 @@ export const useOwnTasks = () => {
         syncTaskInState(updatedTask);
       }
 
+      showToast(setToast, "Task marked as completed.", "success");
       await loadTasks();
     } catch (err) {
       console.error("Personal task completion failed:", err);
-      alert(err.response?.data?.message || "Failed to complete personal reminder");
+      showToast(setToast, err.response?.data?.message || "Failed to complete task.", "error");
+      await loadTasksRef.current();
     } finally {
       setCompletingTaskId("");
+    }
+  };
+
+  const openEditModal = (task) => {
+    if (!task) return;
+
+    editTargetTaskIdRef.current = String(task._id);
+    setEditForm({
+      title: task.title || "",
+      description: task.description || "",
+      reminderDate: task.reminderDate || "",
+      reminderTime: task.reminderTime || "",
+      reminderType: task.reminderType || "one_time",
+      weeklyDayOfWeek:
+        task.weeklyDayOfWeek !== undefined && task.weeklyDayOfWeek !== null
+          ? String(task.weeklyDayOfWeek)
+          : "",
+      monthlyDayOfMonth:
+        task.monthlyDayOfMonth !== undefined && task.monthlyDayOfMonth !== null
+          ? String(task.monthlyDayOfMonth)
+          : "",
+    });
+    setEditAttachmentFile(null);
+    setEditAttachmentPreview("");
+    setEditMode(true);
+  };
+
+  const closeEditModal = () => {
+    setEditMode(false);
+    setEditForm(initialPersonalTaskFormState);
+    setEditAttachmentFile(null);
+    setEditAttachmentPreview((v) => {
+      if (v.startsWith("blob:")) URL.revokeObjectURL(v);
+      return "";
+    });
+    if (editAttachmentInputRef.current) {
+      editAttachmentInputRef.current.value = "";
+    }
+    editTargetTaskIdRef.current = "";
+  };
+
+  const handleEditFieldChange = (event) => {
+    const { name, value } = event.target;
+
+    setEditForm((currentValue) => {
+      const nextValue = { ...currentValue, [name]: value };
+
+      if (name === "reminderDate") {
+        const derivedValues = getRecurrenceDefaultsFromDate(value);
+        if (currentValue.reminderType === "weekly" && !currentValue.weeklyDayOfWeek) {
+          nextValue.weeklyDayOfWeek = derivedValues.weeklyDayOfWeek;
+        }
+        if (currentValue.reminderType === "monthly" && !currentValue.monthlyDayOfMonth) {
+          nextValue.monthlyDayOfMonth = derivedValues.monthlyDayOfMonth;
+        }
+      }
+
+      if (name === "reminderType") {
+        const derivedValues = getRecurrenceDefaultsFromDate(currentValue.reminderDate);
+        if (value === "weekly") {
+          nextValue.weeklyDayOfWeek = currentValue.weeklyDayOfWeek || derivedValues.weeklyDayOfWeek;
+        } else {
+          nextValue.weeklyDayOfWeek = "";
+        }
+        if (value === "monthly") {
+          nextValue.monthlyDayOfMonth =
+            currentValue.monthlyDayOfMonth || derivedValues.monthlyDayOfMonth;
+        } else {
+          nextValue.monthlyDayOfMonth = "";
+        }
+      }
+
+      return nextValue;
+    });
+  };
+
+  const handleEditAttachmentChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    const validationMessage = validateFile(file, IMAGE_FILE_OPTIONS);
+
+    if (validationMessage) {
+      showToast(setToast, validationMessage, "warning");
+      event.target.value = "";
+      return;
+    }
+
+    setEditAttachmentFile(file);
+    setEditAttachmentPreview((v) => {
+      if (v.startsWith("blob:")) URL.revokeObjectURL(v);
+      return file ? URL.createObjectURL(file) : "";
+    });
+  };
+
+  const handleUpdateTask = async (event) => {
+    event.preventDefault();
+    const taskId = editTargetTaskIdRef.current;
+    if (!taskId) return;
+
+    setUpdating(true);
+
+    try {
+      const response = await updatePersonalTask(
+        taskId,
+        buildPersonalTaskFormData(editForm, editAttachmentFile)
+      );
+      const updatedTask = response.data?.task;
+
+      if (updatedTask) {
+        syncTaskInState(updatedTask);
+      }
+
+      closeEditModal();
+      showToast(setToast, "Task updated successfully.", "success");
+    } catch (err) {
+      console.error("Personal task update failed:", err);
+      showToast(setToast, err.response?.data?.message || "Failed to update task.", "error");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!confirmDeleteTaskId) return;
+
+    setDeleting(true);
+
+    try {
+      await deletePersonalTask(confirmDeleteTaskId);
+
+      setRows((currentValue) =>
+        currentValue.filter((row) => String(row._id) !== String(confirmDeleteTaskId))
+      );
+
+      if (String(id || "") === String(confirmDeleteTaskId)) {
+        navigate("/own-tasks", { replace: true });
+      }
+
+      setConfirmDeleteTaskId("");
+      showToast(setToast, "Task deleted.", "success");
+    } catch (err) {
+      console.error("Personal task deletion failed:", err);
+      showToast(setToast, err.response?.data?.message || "Failed to delete task.", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -510,6 +670,10 @@ export const useOwnTasks = () => {
     access: {
       isEmployee,
     },
+    toast: {
+      toast,
+      onClose: () => setToast((t) => ({ ...t, show: false })),
+    },
     header: {
       activeFilterPills,
       notificationPermission,
@@ -533,7 +697,9 @@ export const useOwnTasks = () => {
       id,
       markReminderRead,
       navigateToList: () => navigate("/own-tasks"),
-      onCompleteTask: handleCompleteTask,
+      onCompleteTask: (taskId) => setConfirmCompleteTaskId(String(taskId)),
+      onDeleteTask: (taskId) => setConfirmDeleteTaskId(String(taskId)),
+      onEditTask: openEditModal,
       onOpenShareModal: openShareModal,
       sharingTaskId,
       taskAttachmentUrl,
@@ -558,11 +724,39 @@ export const useOwnTasks = () => {
       hasFilters,
       id,
       loading,
-      onCompleteTask: handleCompleteTask,
+      onCompleteTask: (taskId) => setConfirmCompleteTaskId(String(taskId)),
+      onDeleteTask: (taskId) => setConfirmDeleteTaskId(String(taskId)),
+      onEditTask: openEditModal,
       onOpenShareModal: openShareModal,
       onViewTask: (taskId) => navigate(`/own-tasks/${taskId}`),
       rows: tableRows,
       sharingTaskId,
+    },
+    confirmComplete: {
+      open: Boolean(confirmCompleteTaskId),
+      loading: Boolean(completingTaskId),
+      onConfirm: async () => {
+        await handleCompleteTask(confirmCompleteTaskId);
+        setConfirmCompleteTaskId("");
+      },
+      onCancel: () => setConfirmCompleteTaskId(""),
+    },
+    confirmDelete: {
+      open: Boolean(confirmDeleteTaskId),
+      loading: deleting,
+      onConfirm: handleDeleteTask,
+      onCancel: () => setConfirmDeleteTaskId(""),
+    },
+    editModal: {
+      attachmentInputRef: editAttachmentInputRef,
+      attachmentPreview: editAttachmentPreview,
+      form: editForm,
+      handleAttachmentChange: handleEditAttachmentChange,
+      handleFieldChange: handleEditFieldChange,
+      onClose: closeEditModal,
+      onSubmit: handleUpdateTask,
+      open: editMode,
+      saving: updating,
     },
     shareModal: {
       employees: visibleShareableEmployees,

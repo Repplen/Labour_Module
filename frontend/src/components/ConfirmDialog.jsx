@@ -39,6 +39,7 @@ const VARIANTS = {
 export default function ConfirmDialog({
   open,
   variant      = "danger",
+  icon,
   title        = "Are you sure?",
   message      = "This action cannot be undone.",
   confirmLabel = "Confirm",
@@ -129,9 +130,10 @@ export default function ConfirmDialog({
               alignItems:     "center",
               justifyContent: "center",
               fontSize:       "2rem",
+              color:          config.accentColor,
               marginBottom:   "1.25rem",
             }}>
-              {config.emoji}
+              {icon ?? config.emoji}
             </div>
 
             {/* Title */}
