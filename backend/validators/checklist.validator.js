@@ -66,10 +66,30 @@ const checklistDecisionSchema = z
   })
   .passthrough();
 
+const checklistTaskReportQuerySchema = z
+  .object({
+    search: optionalTrimmedString,
+    fromDate: optionalTrimmedString,
+    toDate: optionalTrimmedString,
+    status: optionalTrimmedString,
+    scheduleType: optionalTrimmedString,
+    companyName: optionalTrimmedString,
+    siteId: optionalTrimmedString,
+    site: optionalTrimmedString,
+    department: optionalTrimmedString,
+    subDepartment: optionalTrimmedString,
+    assignedEmployee: optionalTrimmedString,
+    approverEmployee: optionalTrimmedString,
+    timelinessStatus: optionalTrimmedString,
+    submissionTimingStatus: optionalTrimmedString,
+  })
+  .passthrough();
+
 module.exports = {
   checklistBulkDeleteSchema,
   checklistCreateSchema,
   checklistDecisionSchema,
+  checklistTaskReportQuerySchema,
   generatedChecklistTaskBulkDeleteSchema,
   checklistUpdateSchema,
   idParamSchema,
