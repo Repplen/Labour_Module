@@ -165,11 +165,7 @@ export default function OwnTaskCreateForm({
         </div>
 
         <div className="d-flex flex-wrap gap-2 pt-1 mt-1 border-top">
-          <button
-            type="submit"
-            className={`btn btn-primary btn-create${saving ? " btn-create--saving" : ""}`}
-            disabled={saving}
-          >
+          <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? "Creating..." : "Create Own Task"}
           </button>
           <button
@@ -178,7 +174,6 @@ export default function OwnTaskCreateForm({
             onClick={resetCreateForm}
             disabled={saving}
           >
-            <i className="bi bi-arrow-counterclockwise" />
             Reset
           </button>
         </div>

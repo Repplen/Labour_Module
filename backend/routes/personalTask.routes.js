@@ -5,14 +5,12 @@ const upload = require("../middleware/upload");
 const {
   completePersonalTask,
   createPersonalTask,
-  deletePersonalTask,
   getShareableEmployees,
   getMyPersonalTaskNotifications,
   getMyPersonalTasks,
   getPersonalTaskById,
   markPersonalTaskNotificationRead,
   sharePersonalTask,
-  updatePersonalTask,
 } = require("../controllers/personalTask.controller");
 
 router.get("/", auth, requirePermission("own_task", "view"), getMyPersonalTasks);
@@ -23,7 +21,5 @@ router.post("/", auth, requirePermission("own_task", "add"), upload.single("atta
 router.post("/:id/share", auth, requirePermission("own_task", "transfer"), sharePersonalTask);
 router.post("/:id/read", auth, requirePermission("own_task", "view"), markPersonalTaskNotificationRead);
 router.patch("/:id/complete", auth, requirePermission("own_task", "edit"), completePersonalTask);
-router.put("/:id", auth, requirePermission("own_task", "edit"), upload.single("attachment"), updatePersonalTask);
-router.delete("/:id", auth, requirePermission("own_task", "delete"), deletePersonalTask);
 
 module.exports = router;

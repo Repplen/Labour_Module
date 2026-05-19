@@ -15,13 +15,6 @@ import {
 import { getViewerTaskLabel } from "../../utils/personalTaskForm";
 import DetailField from "./DetailField";
 
-const canEdit = (task) =>
-  (task.viewerRelationship === "own" || task.viewerRelationship === "creator") &&
-  task.status !== "completed";
-
-const canDelete = (task) =>
-  task.viewerRelationship === "own" || task.viewerRelationship === "creator";
-
 export default function OwnTaskDetailPanel({
   completingTaskId,
   detailLoading,
@@ -29,8 +22,6 @@ export default function OwnTaskDetailPanel({
   markReminderRead,
   navigateToList,
   onCompleteTask,
-  onDeleteTask,
-  onEditTask,
   onOpenShareModal,
   sharingTaskId,
   taskAttachmentUrl,
@@ -118,17 +109,6 @@ export default function OwnTaskDetailPanel({
           </div>
 
           <div className="d-flex flex-wrap gap-2">
-            {canEdit(taskDetail) ? (
-              <button
-                type="button"
-                className="btn btn-outline-warning"
-                onClick={() => onEditTask(taskDetail)}
-              >
-                <i className="bi bi-pencil me-1" />
-                Edit
-              </button>
-            ) : null}
-
             {taskDetail.canShare && taskDetail.status !== "completed" ? (
               <button
                 type="button"
@@ -136,7 +116,7 @@ export default function OwnTaskDetailPanel({
                 onClick={() => { void onOpenShareModal(taskDetail); }}
                 disabled={String(sharingTaskId) === String(taskDetail._id)}
               >
-                {String(sharingTaskId) === String(taskDetail._id) ? "Sharing..." : "Share Task"}
+                {String(sharingTaskId) === String(taskDetail._id) ? "Sharing..." : "Sharing Employee"}
               </button>
             ) : null}
 
@@ -166,17 +146,6 @@ export default function OwnTaskDetailPanel({
                 onClick={() => markReminderRead(taskDetail._id)}
               >
                 Mark Notification Read
-              </button>
-            ) : null}
-
-            {canDelete(taskDetail) ? (
-              <button
-                type="button"
-                className="btn btn-outline-danger"
-                onClick={() => onDeleteTask(taskDetail._id)}
-              >
-                <i className="bi bi-trash me-1" />
-                Delete
               </button>
             ) : null}
           </div>

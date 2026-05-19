@@ -1,4 +1,5 @@
 import {
+  formatEmployeeLabel,
   formatNotificationStateLabel,
   formatPersonalTaskDateTime,
   formatPersonalTaskStatus,
@@ -17,8 +18,6 @@ export default function OwnTaskTable({
   id,
   loading,
   onCompleteTask,
-  onDeleteTask,
-  onEditTask,
   onOpenShareModal,
   onViewTask,
   rows,
@@ -30,15 +29,6 @@ export default function OwnTaskTable({
     <div className="table-shell own-tasks-table-shell">
       <div className="table-responsive">
         <table className="table table-bordered align-middle mb-0 own-tasks-table">
-          <colgroup>
-            <col style={{ width: "3.5rem" }} />
-            <col />
-            <col style={{ width: "12rem" }} />
-            <col style={{ width: "10rem" }} />
-            <col style={{ width: "10rem" }} />
-            <col style={{ width: "7rem" }} />
-            <col style={{ width: "1%" }} />
-          </colgroup>
           <thead className="table-dark">
             <tr>
               <th>Sl.No</th>
@@ -47,7 +37,7 @@ export default function OwnTaskTable({
               <th>Type</th>
               <th>Notification</th>
               <th>Status</th>
-              <th className="text-nowrap">Action</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -76,14 +66,30 @@ export default function OwnTaskTable({
                   >
                     <td>{index + 1}</td>
                     <td>
-                      <div className="own-task-title">
-                        {row.title || "-"}
-                        {row.attachment ? (
-                          <i className="bi bi-paperclip ms-1 own-task-meta" title="Has attachment" />
+                      <div className="own-tasks-title-cell">
+                        <div className="fw-semibold">{row.title || "-"}</div>
+                        <div className="small text-muted">
+                          {row.description || "No description added"}
+                        </div>
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                          <span className="badge text-bg-light">{getViewerTaskLabel(row)}</span>
+                          {row.isSharedTask ? (
+                            <span className="small text-muted">
+                              Shared by: {formatEmployeeLabel(row.creator)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="small text-muted mt-1">
+                          Assigned to: {formatEmployeeLabel(row.assignedEmployee)}
+                        </div>
+                        {row.status === "completed" ? (
+                          <div className="small text-muted">
+                            Completed: {formatPersonalTaskDateTime(row.completedAt)}
+                          </div>
                         ) : null}
-                      </div>
-                      <div className="mt-1">
-                        <span className="badge text-bg-light">{getViewerTaskLabel(row)}</span>
+                        {row.attachment ? (
+                          <div className="small text-primary mt-1">Image attached</div>
+                        ) : null}
                       </div>
                     </td>
                     <td>
@@ -108,12 +114,10 @@ export default function OwnTaskTable({
                         {formatPersonalTaskStatus(row.status)}
                       </span>
                     </td>
-                    <td className="text-nowrap">
+                    <td>
                       <OwnTaskRowActions
                         row={row}
                         onViewTask={onViewTask}
-                        onEditTask={onEditTask}
-                        onDeleteTask={onDeleteTask}
                         onOpenShareModal={onOpenShareModal}
                         onCompleteTask={onCompleteTask}
                         completingTaskId={completingTaskId}
