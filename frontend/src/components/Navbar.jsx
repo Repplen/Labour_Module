@@ -222,6 +222,15 @@ export default function Navbar() {
           ? { to: "/masters/designations", label: "Designations" }
           : null,
         can("site_master", "view") ? { to: "/masters/sites", label: "Sites" } : null,
+        can("main_location", "view")
+          ? { to: "/masters/main-locations", label: "Main Location" }
+          : null,
+        can("material_master", "view")
+          ? { to: "/masters/materials", label: "Material Master" }
+          : null,
+        can("nature_of_work", "view")
+          ? { to: "/masters/nature-of-work", label: "Nature of Work" }
+          : null,
         can("checklist_transfer", "view")
           ? { to: "/masters/checklist-transfer", label: "Checklist Transfer" }
           : null,

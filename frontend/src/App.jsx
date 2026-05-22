@@ -45,6 +45,9 @@ import CompanyMaster from "./pages/masters/CompanyMaster";
 import DepartmentMaster from "./pages/masters/DepartmentMaster";
 import DesignationMaster from "./pages/masters/DesignationMaster";
 import ChecklistTransferMaster from "./pages/masters/ChecklistTransferMaster";
+import MainLocation from "./pages/masters/MainLocation";
+import MaterialMaster from "./pages/masters/MaterialMaster";
+import NatureOfWork from "./pages/masters/NatureOfWork";
 import SiteMaster from "./pages/masters/SiteMaster";
 import AttendanceDashboard from "./pages/attendance/AttendanceDashboard";
 import AttendanceDailyEntry from "./pages/attendance/AttendanceDailyEntry";
@@ -467,6 +470,33 @@ function AppRoutes() {
             element={
               <PermissionRoute moduleKey="site_master">
                 <SiteMaster />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/masters/main-locations"
+            element={
+              <PermissionRoute moduleKey="main_location">
+                <MainLocation />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/masters/materials"
+            element={
+              <PermissionRoute moduleKey="material_master">
+                <MaterialMaster />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/masters/nature-of-work"
+            element={
+              <PermissionRoute moduleKey="nature_of_work">
+                <NatureOfWork />
               </PermissionRoute>
             }
           />

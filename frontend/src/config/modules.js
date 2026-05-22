@@ -14,6 +14,10 @@ export const MODULE_FLAGS = {
   masters: true,
   company_master: true,
   site_master: true,
+  main_location: true,
+  material_master: true,
+  nature_of_work: true,
+  uom: true,
   department_master: true,
   sub_department_master: true,
   designation_master: true,
@@ -69,6 +73,10 @@ export const PERMISSION_MODULE_DEPENDENCIES = {
   own_profile: ["own_profile"],
   company_master: ["masters", "company_master"],
   site_master: ["masters", "site_master"],
+  main_location: ["masters", "main_location"],
+  material_master: ["masters", "material_master"],
+  nature_of_work: ["masters", "nature_of_work"],
+  uom: ["masters", "uom"],
   department_master: ["masters", "department_master"],
   sub_department_master: ["masters", "department_master", "sub_department_master"],
   designation_master: ["masters", "designation_master"],
@@ -157,6 +165,18 @@ export const isRouteModuleEnabled = (path = "", flags = MODULE_FLAGS) => {
 
   if (normalizedPath.startsWith("/attendance")) {
     return isModuleEnabled("attendance", flags);
+  }
+
+  if (normalizedPath.startsWith("/masters/main-locations")) {
+    return isModuleEnabled("main_location", flags);
+  }
+
+  if (normalizedPath.startsWith("/masters/materials")) {
+    return isModuleEnabled("material_master", flags);
+  }
+
+  if (normalizedPath.startsWith("/masters/nature-of-work")) {
+    return isModuleEnabled("nature_of_work", flags);
   }
 
   if (normalizedPath.startsWith("/reports/checklists")) {
