@@ -28,6 +28,30 @@ router.get(
   requirePermission("employee_master", "export"),
   controller.exportEmployeesExcel
 );
+router.get(
+  "/labours",
+  moduleAnyEnabled(["employee_master", "labour_team_master"]),
+  auth,
+  requireAnyPermission([
+    { moduleKey: "employee_master", actionKey: "view" },
+    { moduleKey: "labour_team_master", actionKey: "view" },
+    { moduleKey: "labour_team_master", actionKey: "add" },
+    { moduleKey: "labour_team_master", actionKey: "edit" },
+  ]),
+  controller.getLabourEmployees
+);
+router.get(
+  "/piece-workers",
+  moduleAnyEnabled(["employee_master", "piece_worker_team_master"]),
+  auth,
+  requireAnyPermission([
+    { moduleKey: "employee_master", actionKey: "view" },
+    { moduleKey: "piece_worker_team_master", actionKey: "view" },
+    { moduleKey: "piece_worker_team_master", actionKey: "add" },
+    { moduleKey: "piece_worker_team_master", actionKey: "edit" },
+  ]),
+  controller.getPieceWorkerEmployees
+);
 router.get("/qr/:qrToken", controller.getEmployeeByQrToken);
 router.post(
   "/:id/qr",

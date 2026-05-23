@@ -141,6 +141,104 @@ const employeeSchema = new mongoose.Schema(
       default: null
     },
 
+    employeeWorkType: {
+      type: String,
+      enum: ["General Employee", "Labour", "Piece Worker"],
+      default: "General Employee",
+      trim: true,
+      index: true
+    },
+    skillType: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    natureOfWorkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "NatureOfWork",
+      default: null
+    },
+    natureOfWorkPath: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    subNatureOfWorkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "NatureOfWork",
+      default: null
+    },
+    subNatureOfWorkPath: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    uomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Uom",
+      default: null
+    },
+    uomName: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    uomSymbol: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    rateType: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    standardRate: {
+      type: Number,
+      default: null
+    },
+    overtimeRate: {
+      type: Number,
+      default: null
+    },
+    pieceRate: {
+      type: Number,
+      default: null
+    },
+    gstApplicable: {
+      type: Boolean,
+      default: false
+    },
+    gstPercent: {
+      type: Number,
+      default: null
+    },
+    gstAmount: {
+      type: Number,
+      default: null
+    },
+    grossRate: {
+      type: Number,
+      default: null
+    },
+    netRate: {
+      type: Number,
+      default: null
+    },
+    rateEffectiveFrom: {
+      type: Date,
+      default: null
+    },
+    rateEffectiveTo: {
+      type: Date,
+      default: null
+    },
+    rateRemarks: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
     /* ✅ MULTIPLE SITES */
     sites: [
       {

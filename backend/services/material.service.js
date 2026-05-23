@@ -3,6 +3,7 @@ const Uom = require("../models/Uom");
 const {
   VALID_MATERIAL_CODE_REGEX,
   VALID_MATERIAL_TEXT_REGEX,
+  calculateMaterialRates,
   createMaterialError,
   escapeRegExp,
   normalizeMaterialCode,
@@ -36,7 +37,7 @@ const validateMaterialCode = (value) => {
 const toNumberOrNull = (value, { positive = false, field, message }) => {
   if (value === "" || value === null || typeof value === "undefined") return null;
   const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || (positive ? numericValue <= 0 : numericValue < 0)) {
+  if (!Number.isFinite(numericValue) || (positive ? numericValue < 0 : numericValue < 0)) {
     throw createMaterialError(message, 400, field);
   }
   return numericValue;
@@ -46,20 +47,21 @@ const validateNumericFields = (payload) => {
   const standardRate = toNumberOrNull(payload.standardRate, {
     positive: true,
     field: "standardRate",
-    message: "Rate must be a positive number.",
+    message: "Standard rate must be a positive number.",
   });
   const gstPercent = toNumberOrNull(payload.gstPercent, {
     field: "gstPercent",
-    message: "GST must be between 0 and 100.",
+    message: "GST percentage must be between 0 and 100.",
   });
 
   if (gstPercent !== null && (gstPercent < 0 || gstPercent > 100)) {
-    throw createMaterialError("GST must be between 0 and 100.", 400, "gstPercent");
+    throw createMaterialError("GST percentage must be between 0 and 100.", 400, "gstPercent");
   }
 
   return {
     standardRate,
     gstPercent,
+    ...calculateMaterialRates({ standardRate, gstPercent }),
     minimumStock: toNumberOrNull(payload.minimumStock, {
       field: "minimumStock",
       message: "Minimum stock must be zero or positive.",
@@ -68,6 +70,21 @@ const validateNumericFields = (payload) => {
       field: "openingStock",
       message: "Opening stock must be zero or positive.",
     }),
+  };
+};
+
+const withSafeRateFields = (material = {}) => {
+  const row = typeof material.toObject === "function" ? material.toObject() : { ...material };
+  const calculatedRates = calculateMaterialRates({
+    standardRate: row.standardRate,
+    gstPercent: row.gstPercent,
+  });
+
+  return {
+    ...row,
+    gstAmount: row.gstAmount ?? calculatedRates.gstAmount,
+    grossRate: row.grossRate ?? calculatedRates.grossRate,
+    netRate: row.netRate ?? calculatedRates.netRate,
   };
 };
 
@@ -140,16 +157,24 @@ const buildMaterialFilter = (query = {}) => {
   return filter;
 };
 
-const listMaterialsService = async (query = {}) =>
-  populateMaterialQuery(Material.find(buildMaterialFilter(query)).sort({ materialName: 1, materialCode: 1 })).lean();
+const listMaterialsService = async (query = {}) => {
+  const rows = await populateMaterialQuery(
+    Material.find(buildMaterialFilter(query)).sort({ materialName: 1, materialCode: 1 })
+  ).lean();
+  return rows.map(withSafeRateFields);
+};
 
-const listActiveMaterialsService = async (query = {}) =>
-  populateMaterialQuery(
+const listActiveMaterialsService = async (query = {}) => {
+  const rows = await populateMaterialQuery(
     Material.find({ ...buildMaterialFilter(query), isActive: true }).sort({ materialName: 1 })
   ).lean();
+  return rows.map(withSafeRateFields);
+};
 
-const getMaterialService = async (id) =>
-  populateMaterialQuery(Material.findOne({ _id: id, ...activeFilter })).lean();
+const getMaterialService = async (id) => {
+  const row = await populateMaterialQuery(Material.findOne({ _id: id, ...activeFilter })).lean();
+  return row ? withSafeRateFields(row) : null;
+};
 
 const getMaterialById = async (id) => {
   const material = await Material.findOne({ _id: id, ...activeFilter });
@@ -200,7 +225,7 @@ const createMaterialService = async ({ payload, userId = "" }) => {
     updatedBy: userId,
   });
 
-  return populateMaterialQuery(Material.findById(material._id)).lean();
+  return withSafeRateFields(await populateMaterialQuery(Material.findById(material._id)).lean());
 };
 
 const updateMaterialService = async ({ id, payload, userId = "" }) => {
@@ -220,7 +245,7 @@ const updateMaterialService = async ({ id, payload, userId = "" }) => {
 
   Object.assign(material, materialPayload, { updatedBy: userId });
   await material.save();
-  return populateMaterialQuery(Material.findById(material._id)).lean();
+  return withSafeRateFields(await populateMaterialQuery(Material.findById(material._id)).lean());
 };
 
 const hasBlockingUsage = async () => false;
@@ -248,7 +273,7 @@ const updateMaterialStatusService = async ({ id, isActive, userId = "" }) => {
   material.isActive = Boolean(isActive);
   material.updatedBy = userId;
   await material.save();
-  return populateMaterialQuery(Material.findById(material._id)).lean();
+  return withSafeRateFields(await populateMaterialQuery(Material.findById(material._id)).lean());
 };
 
 module.exports = {

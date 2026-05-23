@@ -59,11 +59,50 @@ const toOptionalPositiveNumber = (value) => {
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : NaN;
 };
 
+const roundCurrency = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.round((numericValue + Number.EPSILON) * 100) / 100;
+};
+
+const calculateMaterialRates = ({ standardRate, gstPercent } = {}) => {
+  if (standardRate === "" || standardRate === null || typeof standardRate === "undefined") {
+    return {
+      gstAmount: null,
+      grossRate: null,
+      netRate: null,
+    };
+  }
+
+  const baseRate = Number(standardRate);
+  const gstRate = gstPercent === "" || gstPercent === null || typeof gstPercent === "undefined"
+    ? 0
+    : Number(gstPercent);
+
+  if (!Number.isFinite(baseRate) || baseRate < 0 || !Number.isFinite(gstRate) || gstRate < 0 || gstRate > 100) {
+    return {
+      gstAmount: null,
+      grossRate: null,
+      netRate: null,
+    };
+  }
+
+  const gstAmount = roundCurrency((baseRate * gstRate) / 100);
+  const grossRate = roundCurrency(baseRate + gstAmount);
+
+  return {
+    gstAmount,
+    grossRate,
+    netRate: grossRate,
+  };
+};
+
 module.exports = {
   MATERIAL_CATEGORIES,
   MATERIAL_TYPES,
   VALID_MATERIAL_CODE_REGEX,
   VALID_MATERIAL_TEXT_REGEX,
+  calculateMaterialRates,
   createMaterialError,
   escapeRegExp,
   getAuditUserId,
@@ -71,6 +110,7 @@ module.exports = {
   normalizeMaterialCode,
   normalizeOptionalObjectId,
   normalizeText,
+  roundCurrency,
   toOptionalNonNegativeNumber,
   toOptionalPositiveNumber,
 };

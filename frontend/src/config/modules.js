@@ -15,7 +15,8 @@ export const MODULE_FLAGS = {
   company_master: true,
   site_master: true,
   main_location: true,
-  material_master: true,
+  equipment_master: true,
+  labour_piece_worker_master: true,
   nature_of_work: true,
   uom: true,
   department_master: true,
@@ -74,7 +75,8 @@ export const PERMISSION_MODULE_DEPENDENCIES = {
   company_master: ["masters", "company_master"],
   site_master: ["masters", "site_master"],
   main_location: ["masters", "main_location"],
-  material_master: ["masters", "material_master"],
+  equipment_master: ["masters", "equipment_master"],
+  labour_piece_worker_master: ["masters", "labour_piece_worker_master"],
   nature_of_work: ["masters", "nature_of_work"],
   uom: ["masters", "uom"],
   department_master: ["masters", "department_master"],
@@ -171,8 +173,12 @@ export const isRouteModuleEnabled = (path = "", flags = MODULE_FLAGS) => {
     return isModuleEnabled("main_location", flags);
   }
 
-  if (normalizedPath.startsWith("/masters/materials")) {
-    return isModuleEnabled("material_master", flags);
+  if (normalizedPath.startsWith("/masters/equipment")) {
+    return isModuleEnabled("equipment_master", flags);
+  }
+
+  if (normalizedPath.startsWith("/masters/labour-piece-workers")) {
+    return isModuleEnabled("labour_piece_worker_master", flags);
   }
 
   if (normalizedPath.startsWith("/masters/nature-of-work")) {

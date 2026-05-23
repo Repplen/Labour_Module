@@ -1,6 +1,8 @@
 const Employee = require("../models/Employee");
 const Department = require("../models/Department");
 const Site = require("../models/Site");
+const NatureOfWork = require("../models/NatureOfWork");
+const Uom = require("../models/Uom");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
@@ -15,6 +17,17 @@ const {
   normalizeEmployeeEmail,
   normalizeEmployeeMobile,
 } = require("../utils/employeeContactNormalization");
+const {
+  EMPLOYEE_SKILL_TYPES,
+  EMPLOYEE_WORK_TYPES,
+  LABOUR_RATE_TYPES,
+  PIECE_WORKER_RATE_TYPES,
+  calculateEmployeeWorkRates,
+  createEmployeeWorkError,
+  normalizeOptionalObjectId,
+  normalizeText,
+  toBoolean,
+} = require("../helpers/employeeWorkRate.helper");
 
 const normalizeSites = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
@@ -460,6 +473,206 @@ const validateSuperiorEmployee = async (superiorEmployeeId, employeeId = null) =
   return normalizedId;
 };
 
+const toOptionalNonNegativeNumber = (value, { field, message }) => {
+  if (value === "" || value === null || typeof value === "undefined") return null;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    throw createEmployeeWorkError(message, 400, field);
+  }
+  return numericValue;
+};
+
+const toRequiredNonNegativeNumber = (value, { field, message }) => {
+  if (value === "" || value === null || typeof value === "undefined") {
+    throw createEmployeeWorkError(message, 400, field);
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    throw createEmployeeWorkError(message, 400, field);
+  }
+  return numericValue;
+};
+
+const toOptionalDate = (value) => {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue) return null;
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) {
+    throw createEmployeeWorkError("Rate effective date must be valid", 400, "rateEffectiveFrom");
+  }
+  return date;
+};
+
+const getNatureOfWorkSnapshot = async ({ natureOfWorkId, subNatureOfWorkId, required = false }) => {
+  const normalizedNatureId = normalizeOptionalObjectId(natureOfWorkId);
+  const normalizedSubNatureId = normalizeOptionalObjectId(subNatureOfWorkId);
+  const targetNatureId = normalizedSubNatureId || normalizedNatureId;
+
+  if (!targetNatureId) {
+    if (required) {
+      throw createEmployeeWorkError("Nature of work is required.", 400, "natureOfWorkId");
+    }
+    return {
+      natureOfWorkId: null,
+      natureOfWorkPath: "",
+      subNatureOfWorkId: null,
+      subNatureOfWorkPath: "",
+    };
+  }
+
+  const selectedWork = await NatureOfWork.findOne({
+    _id: targetNatureId,
+    isActive: true,
+    isDeleted: { $ne: true },
+  }).lean();
+
+  if (!selectedWork) {
+    throw createEmployeeWorkError("Nature of work is required.", 400, "natureOfWorkId");
+  }
+
+  let parentWork = null;
+  if (normalizedNatureId && normalizedNatureId !== targetNatureId) {
+    parentWork = await NatureOfWork.findOne({
+      _id: normalizedNatureId,
+      isActive: true,
+      isDeleted: { $ne: true },
+    }).lean();
+  }
+
+  return {
+    natureOfWorkId: parentWork?._id || selectedWork._id,
+    natureOfWorkPath: parentWork?.path || selectedWork.path || selectedWork.workName || "",
+    subNatureOfWorkId: parentWork ? selectedWork._id : null,
+    subNatureOfWorkPath: parentWork ? selectedWork.path || selectedWork.workName || "" : "",
+  };
+};
+
+const getUomSnapshot = async ({ uomId, required = false }) => {
+  const normalizedUomId = normalizeOptionalObjectId(uomId);
+  if (!normalizedUomId) {
+    if (required) throw createEmployeeWorkError("UOM is required.", 400, "uomId");
+    return {
+      uomId: null,
+      uomName: "",
+      uomSymbol: "",
+    };
+  }
+
+  const uom = await Uom.findOne({
+    _id: normalizedUomId,
+    isActive: true,
+    isDeleted: { $ne: true },
+  }).lean();
+
+  if (!uom) throw createEmployeeWorkError("UOM is required.", 400, "uomId");
+
+  return {
+    uomId: uom._id,
+    uomName: uom.uomName,
+    uomSymbol: uom.symbol || "",
+  };
+};
+
+const normalizeEmployeeWorkPayload = async (payload = {}) => {
+  const employeeWorkType = normalizeText(payload.employeeWorkType) || "General Employee";
+  if (!EMPLOYEE_WORK_TYPES.includes(employeeWorkType)) {
+    throw createEmployeeWorkError("Employee work type is required.", 400, "employeeWorkType");
+  }
+
+  const emptyWorkPayload = {
+    employeeWorkType: "General Employee",
+    skillType: "",
+    natureOfWorkId: null,
+    natureOfWorkPath: "",
+    subNatureOfWorkId: null,
+    subNatureOfWorkPath: "",
+    uomId: null,
+    uomName: "",
+    uomSymbol: "",
+    rateType: "",
+    standardRate: null,
+    overtimeRate: null,
+    pieceRate: null,
+    gstApplicable: false,
+    gstPercent: null,
+    gstAmount: null,
+    grossRate: null,
+    netRate: null,
+    rateEffectiveFrom: null,
+    rateEffectiveTo: null,
+    rateRemarks: "",
+  };
+
+  if (employeeWorkType === "General Employee") return emptyWorkPayload;
+
+  const skillType = normalizeText(payload.skillType);
+  const rateType = normalizeText(payload.rateType);
+  const gstApplicable = toBoolean(payload.gstApplicable);
+  const allowedRateTypes =
+    employeeWorkType === "Piece Worker" ? PIECE_WORKER_RATE_TYPES : LABOUR_RATE_TYPES;
+
+  if (employeeWorkType === "Labour" && !skillType) {
+    throw createEmployeeWorkError("Skill / work nature is required.", 400, "skillType");
+  }
+  if (skillType && !EMPLOYEE_SKILL_TYPES.includes(skillType)) {
+    throw createEmployeeWorkError("Skill / work nature is required.", 400, "skillType");
+  }
+  if (!rateType || !allowedRateTypes.includes(rateType)) {
+    throw createEmployeeWorkError("Rate type is required.", 400, "rateType");
+  }
+
+  const standardRate = toRequiredNonNegativeNumber(payload.standardRate, {
+    field: "standardRate",
+    message: "Standard rate must be a positive number.",
+  });
+  const overtimeRate = toOptionalNonNegativeNumber(payload.overtimeRate, {
+    field: "overtimeRate",
+    message: "Overtime rate must be zero or positive.",
+  });
+  const pieceRate = toOptionalNonNegativeNumber(payload.pieceRate, {
+    field: "pieceRate",
+    message: "Piece rate must be zero or positive.",
+  });
+
+  let gstPercent = null;
+  if (gstApplicable) {
+    gstPercent = toRequiredNonNegativeNumber(payload.gstPercent, {
+      field: "gstPercent",
+      message: "GST percentage must be between 0 and 100.",
+    });
+    if (gstPercent < 0 || gstPercent > 100) {
+      throw createEmployeeWorkError("GST percentage must be between 0 and 100.", 400, "gstPercent");
+    }
+  }
+
+  const natureSnapshot = await getNatureOfWorkSnapshot({
+    natureOfWorkId: payload.natureOfWorkId,
+    subNatureOfWorkId: payload.subNatureOfWorkId,
+    required: employeeWorkType === "Piece Worker",
+  });
+  const uomSnapshot = await getUomSnapshot({
+    uomId: payload.uomId,
+    required: employeeWorkType === "Piece Worker",
+  });
+
+  return {
+    employeeWorkType,
+    skillType: employeeWorkType === "Labour" ? skillType : "",
+    ...natureSnapshot,
+    ...uomSnapshot,
+    rateType,
+    standardRate,
+    overtimeRate: employeeWorkType === "Labour" ? overtimeRate : null,
+    pieceRate: employeeWorkType === "Piece Worker" ? pieceRate : null,
+    gstApplicable,
+    gstPercent,
+    ...calculateEmployeeWorkRates({ standardRate, gstApplicable, gstPercent }),
+    rateEffectiveFrom: toOptionalDate(payload.rateEffectiveFrom),
+    rateEffectiveTo: toOptionalDate(payload.rateEffectiveTo),
+    rateRemarks: normalizeText(payload.rateRemarks),
+  };
+};
+
 const mapSubSitesForEmployee = (employee) => {
   const siteRows = employee.sites || [];
   const subSiteRows = employee.subSites || [];
@@ -601,7 +814,14 @@ const ensureEmployeeQrFields = async (req, employee) => {
 
 exports.getEmployees = async (req, res) => {
   try {
-    const { search = "", status = "", department = "" } = req.query;
+    const {
+      search = "",
+      status = "",
+      department = "",
+      employeeWorkType = "",
+      skillType = "",
+      rateType = "",
+    } = req.query;
     const scopeFilter = await buildEmployeeScopeFilter(req.access || {});
     const filter = { ...scopeFilter };
 
@@ -617,6 +837,9 @@ exports.getEmployees = async (req, res) => {
     if (status === "active") filter.isActive = true;
     if (status === "inactive") filter.isActive = false;
     if (department) filter.department = department;
+    if (employeeWorkType) filter.employeeWorkType = employeeWorkType;
+    if (skillType) filter.skillType = skillType;
+    if (rateType) filter.rateType = rateType;
 
     const employees = await Employee.find(filter)
       .populate("department", "name subDepartments")
@@ -660,6 +883,32 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+const listEmployeesByWorkType = async (req, res, employeeWorkType) => {
+  try {
+    const employees = await Employee.find({
+      ...(await buildEmployeeScopeFilter(req.access || {})),
+      employeeWorkType,
+      isActive: true,
+    })
+      .populate("department", "name subDepartments")
+      .populate("designation", "name")
+      .populate("superiorEmployee", "employeeCode employeeName")
+      .populate("sites", "name companyName subSites")
+      .sort({ employeeName: 1, employeeCode: 1 });
+
+    return res.json(employees.map(mapEmployee));
+  } catch (err) {
+    console.error("Get employees by work type error:", err);
+    return res.status(500).json({ message: "Failed to load employees" });
+  }
+};
+
+exports.getLabourEmployees = async (req, res) =>
+  listEmployeesByWorkType(req, res, "Labour");
+
+exports.getPieceWorkerEmployees = async (req, res) =>
+  listEmployeesByWorkType(req, res, "Piece Worker");
+
 exports.createEmployee = async (req, res) => {
   try {
     const safeBody = stripQrFields(req.body);
@@ -690,6 +939,7 @@ exports.createEmployee = async (req, res) => {
     );
     const superiorEmployee = await validateSuperiorEmployee(req.body.superiorEmployee);
     const subSites = await validateSubSites(sites, req.body.subSites);
+    Object.assign(safeBody, await normalizeEmployeeWorkPayload(req.body));
 
     const employee = new Employee({
       ...safeBody,
@@ -717,9 +967,10 @@ exports.createEmployee = async (req, res) => {
       return sendDuplicateEmployeeResponse(res, duplicateKeyErrors);
     }
 
-    res
-      .status(err.status || 500)
-      .json({ message: err.message || "Failed to create employee" });
+    res.status(err.status || 500).json({
+      message: err.message || "Failed to create employee",
+      errors: err.errors || [],
+    });
   }
 };
 
@@ -755,6 +1006,7 @@ exports.updateEmployee = async (req, res) => {
       subDepartment: departmentSelection.subDepartment,
       sites,
     };
+    Object.assign(data, await normalizeEmployeeWorkPayload(req.body));
     applyNormalizedEmployeeContactFields(data, duplicateCheck.normalizedValues);
 
     delete data.password;
@@ -791,9 +1043,10 @@ exports.updateEmployee = async (req, res) => {
       return sendDuplicateEmployeeResponse(res, duplicateKeyErrors);
     }
 
-    res
-      .status(err.status || 500)
-      .json({ message: err.message || "Failed to update employee" });
+    res.status(err.status || 500).json({
+      message: err.message || "Failed to update employee",
+      errors: err.errors || [],
+    });
   }
 };
 

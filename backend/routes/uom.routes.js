@@ -18,9 +18,18 @@ const canReadUom = requireAnyPermission([
   { moduleKey: "nature_of_work", actionKey: "view" },
   { moduleKey: "nature_of_work", actionKey: "add" },
   { moduleKey: "nature_of_work", actionKey: "edit" },
-  { moduleKey: "material_master", actionKey: "view" },
-  { moduleKey: "material_master", actionKey: "add" },
-  { moduleKey: "material_master", actionKey: "edit" },
+  { moduleKey: "equipment_master", actionKey: "view" },
+  { moduleKey: "equipment_master", actionKey: "add" },
+  { moduleKey: "equipment_master", actionKey: "edit" },
+  { moduleKey: "employee_master", actionKey: "view" },
+  { moduleKey: "employee_master", actionKey: "add" },
+  { moduleKey: "employee_master", actionKey: "edit" },
+  { moduleKey: "labour_piece_worker_master", actionKey: "view" },
+  { moduleKey: "labour_piece_worker_master", actionKey: "add" },
+  { moduleKey: "labour_piece_worker_master", actionKey: "edit" },
+  { moduleKey: "piece_worker_team_master", actionKey: "view" },
+  { moduleKey: "piece_worker_team_master", actionKey: "add" },
+  { moduleKey: "piece_worker_team_master", actionKey: "edit" },
 ]);
 
 router.get("/", auth, canReadUom, listUomsController);

@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
 import SearchableCheckboxSelector from "../components/SearchableCheckboxSelector";
+import EmployeeWorkFields from "../features/employeeWork/EmployeeWorkFields";
+import {
+  defaultEmployeeWorkFields,
+  getRateTypesForEmployeeWorkType,
+  validateEmployeeWorkFields,
+} from "../features/employeeWork/employeeWork.helpers";
 import {
   IMAGE_FILE_ACCEPT,
   IMAGE_FILE_OPTIONS,
@@ -113,6 +119,8 @@ export default function EmployeeEdit() {
   const [sitesList, setSitesList] = useState([]);
   const [employeeRows, setEmployeeRows] = useState([]);
   const [superiorEmployees, setSuperiorEmployees] = useState([]);
+  const [natureOfWorks, setNatureOfWorks] = useState([]);
+  const [uoms, setUoms] = useState([]);
   const [subDepartments, setSubDepartments] = useState([]);
   const [subSiteOptions, setSubSiteOptions] = useState([]);
   const [serverDuplicateErrors, setServerDuplicateErrors] = useState({});
@@ -137,6 +145,7 @@ export default function EmployeeEdit() {
     sites: [],
     subSites: [],
     isActive: true,
+    ...defaultEmployeeWorkFields,
   });
 
   const departmentOptions = useMemo(
@@ -176,6 +185,7 @@ export default function EmployeeEdit() {
     [subSiteOptions]
   );
   const clientValidationErrors = useMemo(() => validateEmployeeFields(form), [form]);
+  const workFieldErrors = useMemo(() => validateEmployeeWorkFields(form), [form]);
   const clientDuplicateErrors = useMemo(
     () =>
       getEmployeeDuplicateErrors(
@@ -230,17 +240,24 @@ export default function EmployeeEdit() {
       fieldErrors.email ||
       fieldErrors.mobile
   );
+  const hasWorkFieldErrors = Boolean(Object.keys(workFieldErrors).length);
   const isSaveDisabled =
-    saving || hasFieldErrors || !form.employeeCode.trim() || !form.employeeName.trim();
+    saving ||
+    hasFieldErrors ||
+    hasWorkFieldErrors ||
+    !form.employeeCode.trim() ||
+    !form.employeeName.trim();
 
   const loadAll = useCallback(async () => {
     try {
-      const [emp, dep, des, sites, employeeRes] = await Promise.all([
+      const [emp, dep, des, sites, employeeRes, natureRes, uomRes] = await Promise.all([
         api.get(`/employees/${id}`),
         api.get("/departments"),
         api.get("/designations"),
         api.get("/sites"),
         api.get("/employees"),
+        api.get("/nature-of-work/active"),
+        api.get("/uom/active"),
       ]);
 
       const employee = emp.data;
@@ -266,6 +283,47 @@ export default function EmployeeEdit() {
         sites: selectedSiteIds,
         subSites: initialSubSiteValues,
         isActive: employee.isActive ?? true,
+        employeeWorkType: employee.employeeWorkType || "General Employee",
+        skillType: employee.skillType || "",
+        natureOfWorkId: employee.natureOfWorkId?._id || employee.natureOfWorkId || "",
+        subNatureOfWorkId:
+          employee.subNatureOfWorkId?._id || employee.subNatureOfWorkId || "",
+        uomId: employee.uomId?._id || employee.uomId || "",
+        rateType: employee.rateType || "",
+        standardRate:
+          employee.standardRate === null || typeof employee.standardRate === "undefined"
+            ? ""
+            : String(employee.standardRate),
+        overtimeRate:
+          employee.overtimeRate === null || typeof employee.overtimeRate === "undefined"
+            ? ""
+            : String(employee.overtimeRate),
+        pieceRate:
+          employee.pieceRate === null || typeof employee.pieceRate === "undefined"
+            ? ""
+            : String(employee.pieceRate),
+        gstApplicable: Boolean(employee.gstApplicable),
+        gstPercent:
+          employee.gstPercent === null || typeof employee.gstPercent === "undefined"
+            ? ""
+            : String(employee.gstPercent),
+        gstAmount:
+          employee.gstAmount === null || typeof employee.gstAmount === "undefined"
+            ? ""
+            : String(employee.gstAmount),
+        grossRate:
+          employee.grossRate === null || typeof employee.grossRate === "undefined"
+            ? ""
+            : String(employee.grossRate),
+        netRate:
+          employee.netRate === null || typeof employee.netRate === "undefined"
+            ? ""
+            : String(employee.netRate),
+        rateEffectiveFrom: employee.rateEffectiveFrom
+          ? employee.rateEffectiveFrom.slice(0, 10)
+          : "",
+        rateEffectiveTo: employee.rateEffectiveTo ? employee.rateEffectiveTo.slice(0, 10) : "",
+        rateRemarks: employee.rateRemarks || "",
       });
 
       setCurrentPhoto(employee.photo || "");
@@ -279,6 +337,8 @@ export default function EmployeeEdit() {
       setSuperiorEmployees(
         employeeList.filter((row) => String(row._id) !== String(id))
       );
+      setNatureOfWorks(natureRes.data || []);
+      setUoms(uomRes.data || []);
       setSubSiteOptions(buildSubSiteOptions(siteRows, selectedSiteIds));
       setSubDepartments(buildSubDepartmentOptions(departmentRows, selectedDepartmentIds));
     } catch (err) {
@@ -295,7 +355,39 @@ export default function EmployeeEdit() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === "employeeWorkType") {
+        const rateTypes = getRateTypesForEmployeeWorkType(value);
+        return {
+          ...prev,
+          employeeWorkType: value,
+          skillType: value === "Labour" ? prev.skillType : "",
+          natureOfWorkId: "",
+          subNatureOfWorkId: "",
+          uomId: value === "General Employee" ? "" : prev.uomId,
+          rateType: rateTypes.includes(prev.rateType) ? prev.rateType : "",
+          standardRate: value === "General Employee" ? "" : prev.standardRate,
+          overtimeRate: value === "Labour" ? prev.overtimeRate : "",
+          pieceRate: value === "Piece Worker" ? prev.pieceRate : "",
+          gstApplicable: value === "General Employee" ? false : prev.gstApplicable,
+          gstPercent: value === "General Employee" ? "" : prev.gstPercent,
+          rateEffectiveFrom: value === "General Employee" ? "" : prev.rateEffectiveFrom,
+          rateEffectiveTo: value === "General Employee" ? "" : prev.rateEffectiveTo,
+          rateRemarks: value === "General Employee" ? "" : prev.rateRemarks,
+        };
+      }
+      if (name === "natureOfWorkId") {
+        return { ...prev, natureOfWorkId: value, subNatureOfWorkId: "" };
+      }
+      if (name === "gstApplicable") {
+        return {
+          ...prev,
+          gstApplicable: Boolean(value),
+          gstPercent: value ? prev.gstPercent : "",
+        };
+      }
+      return { ...prev, [name]: value };
+    });
     setServerFieldErrors((prev) => {
       if (!prev[name]) return prev;
       const nextErrors = { ...prev };
@@ -379,7 +471,7 @@ export default function EmployeeEdit() {
       return;
     }
 
-    if (hasFieldErrors || hasDuplicateErrors) {
+    if (hasFieldErrors || hasDuplicateErrors || hasWorkFieldErrors) {
       return;
     }
 
@@ -763,6 +855,16 @@ export default function EmployeeEdit() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="col-12">
+            <EmployeeWorkFields
+              errors={workFieldErrors}
+              form={form}
+              natureOfWorks={natureOfWorks}
+              uoms={uoms}
+              onChange={handleChange}
+            />
           </div>
 
           <div className="col-12 d-flex justify-content-end gap-2">

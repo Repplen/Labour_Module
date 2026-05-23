@@ -1,7 +1,8 @@
-import { formatMoney } from "../helpers/material.helpers";
+import { formatMoney, getMaterialRates } from "../helpers/material.helpers";
 
 export default function MaterialViewModal({ material, onClose }) {
   if (!material) return null;
+  const rates = getMaterialRates(material);
 
   return (
     <div className="material-modal-backdrop" role="dialog" aria-modal="true">
@@ -17,8 +18,11 @@ export default function MaterialViewModal({ material, onClose }) {
           <dt className="col-5">Type</dt><dd className="col-7">{material.materialType || "-"}</dd>
           <dt className="col-5">Brand / Make</dt><dd className="col-7">{material.brand || "-"}</dd>
           <dt className="col-5">Specification</dt><dd className="col-7">{material.specification || "-"}</dd>
-          <dt className="col-5">Rate</dt><dd className="col-7">{formatMoney(material.standardRate)}</dd>
+          <dt className="col-5">Standard Rate</dt><dd className="col-7">{formatMoney(material.standardRate)}</dd>
           <dt className="col-5">GST %</dt><dd className="col-7">{material.gstPercent ?? "-"}</dd>
+          <dt className="col-5">GST Amount</dt><dd className="col-7">{formatMoney(rates.gstAmount)}</dd>
+          <dt className="col-5">Gross Rate</dt><dd className="col-7">{formatMoney(rates.grossRate)}</dd>
+          <dt className="col-5">Net Rate</dt><dd className="col-7">{formatMoney(rates.netRate)}</dd>
           <dt className="col-5">Minimum Stock</dt><dd className="col-7">{material.minimumStock ?? "-"}</dd>
           <dt className="col-5">Opening Stock</dt><dd className="col-7">{material.openingStock ?? "-"}</dd>
           <dt className="col-5">Description</dt><dd className="col-7">{material.description || "-"}</dd>

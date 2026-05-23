@@ -1,0 +1,26 @@
+.equipment-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--app-overlay-bg);
+  backdrop-filter: blur(4px);
+}
+
+.equipment-modal {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
+}
+
+.equipment-modal--sm {
+  width: min(620px, 100%);
+}

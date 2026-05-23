@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import SearchableCheckboxSelector from "../components/SearchableCheckboxSelector";
+import EmployeeWorkFields from "../features/employeeWork/EmployeeWorkFields";
+import {
+  defaultEmployeeWorkFields,
+  getRateTypesForEmployeeWorkType,
+  validateEmployeeWorkFields,
+} from "../features/employeeWork/employeeWork.helpers";
 import {
   IMAGE_FILE_ACCEPT,
   IMAGE_FILE_OPTIONS,
@@ -97,6 +103,8 @@ export default function EmployeeForm() {
   const [sitesList, setSitesList] = useState([]);
   const [employeeRows, setEmployeeRows] = useState([]);
   const [superiorEmployees, setSuperiorEmployees] = useState([]);
+  const [natureOfWorks, setNatureOfWorks] = useState([]);
+  const [uoms, setUoms] = useState([]);
   const [subDepartments, setSubDepartments] = useState([]);
   const [subSiteOptions, setSubSiteOptions] = useState([]);
   const [serverDuplicateErrors, setServerDuplicateErrors] = useState({});
@@ -115,6 +123,7 @@ export default function EmployeeForm() {
     dateOfJoining: "",
     sites: [],
     subSites: [],
+    ...defaultEmployeeWorkFields,
   });
 
   useEffect(() => {
@@ -158,6 +167,7 @@ export default function EmployeeForm() {
     [subSiteOptions]
   );
   const clientValidationErrors = useMemo(() => validateEmployeeFields(form), [form]);
+  const workFieldErrors = useMemo(() => validateEmployeeWorkFields(form), [form]);
   const clientDuplicateErrors = useMemo(
     () =>
       getEmployeeDuplicateErrors(employeeRows, {
@@ -207,20 +217,24 @@ export default function EmployeeForm() {
       fieldErrors.email ||
       fieldErrors.mobile
   );
+  const hasWorkFieldErrors = Boolean(Object.keys(workFieldErrors).length);
   const isSaveDisabled =
     loading ||
     hasFieldErrors ||
+    hasWorkFieldErrors ||
     !form.employeeCode.trim() ||
     !form.employeeName.trim() ||
     !form.password.trim();
 
   const loadMasters = async () => {
     try {
-      const [deptRes, desigRes, siteRes, employeeRes] = await Promise.all([
+      const [deptRes, desigRes, siteRes, employeeRes, natureRes, uomRes] = await Promise.all([
         api.get("/departments"),
         api.get("/designations"),
         api.get("/sites"),
         api.get("/employees"),
+        api.get("/nature-of-work/active"),
+        api.get("/uom/active"),
       ]);
 
       setDepartments(deptRes.data || []);
@@ -228,6 +242,8 @@ export default function EmployeeForm() {
       setSitesList(siteRes.data || []);
       setEmployeeRows(employeeRes.data || []);
       setSuperiorEmployees(employeeRes.data || []);
+      setNatureOfWorks(natureRes.data || []);
+      setUoms(uomRes.data || []);
     } catch (err) {
       console.error("Failed to load masters", err);
       alert("Failed to load masters");
@@ -236,7 +252,35 @@ export default function EmployeeForm() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === "employeeWorkType") {
+        const rateTypes = getRateTypesForEmployeeWorkType(value);
+        return {
+          ...prev,
+          employeeWorkType: value,
+          skillType: value === "Labour" ? prev.skillType : "",
+          natureOfWorkId: "",
+          subNatureOfWorkId: "",
+          uomId: value === "General Employee" ? "" : prev.uomId,
+          rateType: rateTypes.includes(prev.rateType) ? prev.rateType : "",
+          standardRate: value === "General Employee" ? "" : prev.standardRate,
+          overtimeRate: value === "Labour" ? prev.overtimeRate : "",
+          pieceRate: value === "Piece Worker" ? prev.pieceRate : "",
+          gstApplicable: value === "General Employee" ? false : prev.gstApplicable,
+          gstPercent: value === "General Employee" ? "" : prev.gstPercent,
+          rateEffectiveFrom: value === "General Employee" ? "" : prev.rateEffectiveFrom,
+          rateEffectiveTo: value === "General Employee" ? "" : prev.rateEffectiveTo,
+          rateRemarks: value === "General Employee" ? "" : prev.rateRemarks,
+        };
+      }
+      if (name === "natureOfWorkId") {
+        return { ...prev, natureOfWorkId: value, subNatureOfWorkId: "" };
+      }
+      if (name === "gstApplicable") {
+        return { ...prev, gstApplicable: Boolean(value), gstPercent: value ? prev.gstPercent : "" };
+      }
+      return { ...prev, [name]: value };
+    });
     setServerFieldErrors((prev) => {
       if (!prev[name]) return prev;
       const nextErrors = { ...prev };
@@ -320,7 +364,7 @@ export default function EmployeeForm() {
       return;
     }
 
-    if (hasFieldErrors || hasDuplicateErrors) {
+    if (hasFieldErrors || hasDuplicateErrors || hasWorkFieldErrors) {
       return;
     }
 
@@ -675,6 +719,16 @@ export default function EmployeeForm() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="col-12">
+            <EmployeeWorkFields
+              errors={workFieldErrors}
+              form={form}
+              natureOfWorks={natureOfWorks}
+              uoms={uoms}
+              onChange={handleChange}
+            />
           </div>
 
           <div className="col-12 d-flex justify-content-end gap-2 mt-1">

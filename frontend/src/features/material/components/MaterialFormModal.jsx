@@ -2,6 +2,8 @@ import {
   GST_OPTIONS,
   MATERIAL_CATEGORIES,
   MATERIAL_TYPES,
+  calculateMaterialRates,
+  formatMoney,
   getUomLabel,
 } from "../helpers/material.helpers";
 
@@ -19,6 +21,10 @@ export default function MaterialFormModal({
   if (!formState.isOpen) return null;
 
   const isEdit = formState.mode === "edit";
+  const ratePreview = calculateMaterialRates({
+    standardRate: formState.standardRate,
+    gstPercent: formState.gstPercent,
+  });
 
   return (
     <div className="material-modal-backdrop" role="dialog" aria-modal="true">
@@ -86,6 +92,18 @@ export default function MaterialFormModal({
                 {GST_OPTIONS.filter(Boolean).map((value) => <option key={value} value={value} />)}
               </datalist>
               <FieldError message={errors.gstPercent} />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">GST Amount</label>
+              <input className="form-control" value={formatMoney(ratePreview.gstAmount)} readOnly />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Gross Rate</label>
+              <input className="form-control" value={formatMoney(ratePreview.grossRate)} readOnly />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Net Rate</label>
+              <input className="form-control" value={formatMoney(ratePreview.netRate)} readOnly />
             </div>
             <div className="col-md-3">
               <label className="form-label">Minimum Stock Level</label>

@@ -9,6 +9,7 @@ import MaterialViewModal from "../../features/material/components/MaterialViewMo
 import { useMaterialFilters } from "../../features/material/hooks/useMaterialFilters";
 import { useMaterialForm } from "../../features/material/hooks/useMaterialForm";
 import { useMaterials } from "../../features/material/hooks/useMaterials";
+import { getMaterialRates } from "../../features/material/helpers/material.helpers";
 import "../../features/material/material.css";
 
 export default function MaterialMaster() {
@@ -114,25 +115,34 @@ export default function MaterialMaster() {
       "Specification / Grade",
       "Standard Rate",
       "GST %",
+      "GST Amount",
+      "Gross Rate",
+      "Net Rate",
       "Minimum Stock",
       "Opening Stock",
       "Status",
     ];
-    const rows = materials.map((material, index) => [
-      index + 1,
-      material.materialCode,
-      material.materialName,
-      material.category,
-      material.uomName ? `${material.uomName} ${material.uomSymbol || ""}` : "",
-      material.materialType,
-      material.brand,
-      material.specification,
-      material.standardRate ?? "",
-      material.gstPercent ?? "",
-      material.minimumStock ?? "",
-      material.openingStock ?? "",
-      material.isActive ? "Active" : "Inactive",
-    ]);
+    const rows = materials.map((material, index) => {
+      const rates = getMaterialRates(material);
+      return [
+        index + 1,
+        material.materialCode,
+        material.materialName,
+        material.category,
+        material.uomName ? `${material.uomName} ${material.uomSymbol || ""}` : "",
+        material.materialType,
+        material.brand,
+        material.specification,
+        material.standardRate ?? "",
+        material.gstPercent ?? "",
+        rates.gstAmount ?? "",
+        rates.grossRate ?? "",
+        rates.netRate ?? "",
+        material.minimumStock ?? "",
+        material.openingStock ?? "",
+        material.isActive ? "Active" : "Inactive",
+      ];
+    });
     const csv = [headers, ...rows]
       .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");

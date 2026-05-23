@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const { auth } = require("../middleware/auth");
-const { requirePermission } = require("../middleware/permissions");
+const { requireAnyPermission, requirePermission } = require("../middleware/permissions");
 const {
   createDepartmentController,
   createSubDepartmentController,
@@ -20,7 +20,15 @@ const {
 router.get(
   "/",
   auth,
-  requirePermission("department_master", "view"),
+  requireAnyPermission([
+    { moduleKey: "department_master", actionKey: "view" },
+    { moduleKey: "labour_team_master", actionKey: "view" },
+    { moduleKey: "labour_team_master", actionKey: "add" },
+    { moduleKey: "labour_team_master", actionKey: "edit" },
+    { moduleKey: "piece_worker_team_master", actionKey: "view" },
+    { moduleKey: "piece_worker_team_master", actionKey: "add" },
+    { moduleKey: "piece_worker_team_master", actionKey: "edit" },
+  ]),
   listDepartmentsController
 );
 

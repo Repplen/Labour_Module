@@ -6,7 +6,7 @@ const materialTextRegex = /^(?=.*[A-Za-z0-9])[A-Za-z0-9]+(?:[ .&()/_-][A-Za-z0-9
 const validateOptionalNumber = ({ errors, field, label, positive = false, value }) => {
   if (value === "" || value === null || typeof value === "undefined") return;
   const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || (positive ? numericValue <= 0 : numericValue < 0)) {
+  if (!Number.isFinite(numericValue) || (positive ? numericValue < 0 : numericValue < 0)) {
     errors[field] = positive ? `${label} must be a positive number.` : `${label} must be zero or positive.`;
   }
 };
@@ -26,6 +26,9 @@ export const validateMaterialForm = (formState) => {
     gstPercent: formState.gstPercent,
     minimumStock: formState.minimumStock,
     openingStock: formState.openingStock,
+    gstAmount: formState.gstAmount,
+    grossRate: formState.grossRate,
+    netRate: formState.netRate,
     isActive: formState.isActive !== false,
   };
 
@@ -45,7 +48,7 @@ export const validateMaterialForm = (formState) => {
   validateOptionalNumber({
     errors,
     field: "standardRate",
-    label: "Rate",
+    label: "Standard rate",
     positive: true,
     value: values.standardRate,
   });
@@ -53,7 +56,7 @@ export const validateMaterialForm = (formState) => {
   if (values.gstPercent !== "" && values.gstPercent !== null && typeof values.gstPercent !== "undefined") {
     const gst = Number(values.gstPercent);
     if (!Number.isFinite(gst) || gst < 0 || gst > 100) {
-      errors.gstPercent = "GST must be between 0 and 100.";
+      errors.gstPercent = "GST percentage must be between 0 and 100.";
     }
   }
 

@@ -225,8 +225,11 @@ export default function Navbar() {
         can("main_location", "view")
           ? { to: "/masters/main-locations", label: "Main Location" }
           : null,
-        can("material_master", "view")
-          ? { to: "/masters/materials", label: "Material Master" }
+        can("equipment_master", "view")
+          ? { to: "/masters/equipment", label: "Equipment Master" }
+          : null,
+        can("labour_piece_worker_master", "view")
+          ? { to: "/masters/labour-piece-workers", label: "Labour & Piece Worker Master" }
           : null,
         can("nature_of_work", "view")
           ? { to: "/masters/nature-of-work", label: "Nature of Work" }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { calculateMaterialRates } from "../features/material/helpers/material.helpers";
 import { validateMaterialForm } from "../features/material/validators/material.validator";
 
 describe("material validator", () => {
@@ -21,7 +22,15 @@ describe("material validator", () => {
       gstPercent: "101",
     });
 
-    expect(result.errors.standardRate).toBe("Rate must be a positive number.");
-    expect(result.errors.gstPercent).toBe("GST must be between 0 and 100.");
+    expect(result.errors.standardRate).toBe("Standard rate must be a positive number.");
+    expect(result.errors.gstPercent).toBe("GST percentage must be between 0 and 100.");
+  });
+
+  it("calculates live material rates", () => {
+    expect(calculateMaterialRates({ standardRate: 100, gstPercent: 18 })).toEqual({
+      gstAmount: 18,
+      grossRate: 118,
+      netRate: 118,
+    });
   });
 });
